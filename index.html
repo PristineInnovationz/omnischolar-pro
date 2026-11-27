@@ -1,0 +1,3218 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="high">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="OmniScholar" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0B1120" />
+  <title>OmniScholar AI Pro — Multi-User Family Edition</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter, Fredoka (Elementary), JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- KaTeX 0.19.1 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.19.1/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.19.1/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.19.1/dist/contrib/auto-render.min.js"></script>
+
+  <!-- PDF.js for Multi-Page PDF Worksheet Uploads -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- =========================================================================
+       FIREBASE FIRESTORE v13.4.0 REAL-TIME FAMILY SYNC
+       Replace FIREBASE_CONFIG placeholders and FAMILY_ID before deploying to Vercel.
+       If left as placeholders, the app automatically runs in safe Local Demo Mode.
+       ========================================================================= -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
+
+    const FIREBASE_CONFIG = {
+      apiKey: "PASTE_YOUR_FIREBASE_API_KEY",
+      authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+      projectId: "PASTE_YOUR_PROJECT_ID",
+      storageBucket: "PASTE_YOUR_PROJECT.firebasestorage.app",
+      messagingSenderId: "PASTE_SENDER_ID",
+      appId: "PASTE_APP_ID"
+    };
+
+    // Change this to a unique, private ID for your household
+    const FAMILY_ID = "my-private-family-id-2026";
+
+    const isPlaceholderConfig =
+      !FIREBASE_CONFIG.apiKey ||
+      FIREBASE_CONFIG.apiKey.includes("PASTE_YOUR_") ||
+      !FIREBASE_CONFIG.projectId ||
+      FIREBASE_CONFIG.projectId.includes("PASTE_YOUR_");
+
+    window.__cloudSyncState = {
+      mode: "local",
+      connected: false,
+      lastSyncedAt: null,
+      familyId: FAMILY_ID
+    };
+
+    if (isPlaceholderConfig) {
+      // Safe Local Demo Mode — no Firebase calls or console errors
+      window.syncFamilyToCloud = async () => false;
+      window.addEventListener("DOMContentLoaded", () => {
+        if (typeof window.updateCloudSyncBadge === "function") {
+          window.updateCloudSyncBadge("local", "Local Demo Mode (Add Firebase keys to sync across devices)");
+        }
+      });
+    } else {
+      try {
+        const app = initializeApp(FIREBASE_CONFIG);
+        const db = getFirestore(app);
+        const FAMILY_DOC = doc(db, "families", FAMILY_ID);
+
+        window.syncFamilyToCloud = async (stateObj) => {
+          try {
+            const payload = {
+              ...stateObj,
+              updatedAt: stateObj.updatedAt || Date.now()
+            };
+            await setDoc(FAMILY_DOC, payload, { merge: true });
+            window.__cloudSyncState.mode = "cloud";
+            window.__cloudSyncState.connected = true;
+            window.__cloudSyncState.lastSyncedAt = payload.updatedAt;
+            if (typeof window.updateCloudSyncBadge === "function") {
+              window.updateCloudSyncBadge("cloud", "Synced to Firebase Firestore");
+            }
+            return true;
+          } catch (err) {
+            if (typeof window.updateCloudSyncBadge === "function") {
+              window.updateCloudSyncBadge("local", "Offline — saved to local cache");
+            }
+            return false;
+          }
+        };
+
+        // Real-time listener for all family devices
+        onSnapshot(
+          FAMILY_DOC,
+          (snap) => {
+            window.__cloudSyncState.mode = "cloud";
+            window.__cloudSyncState.connected = true;
+            if (snap.exists()) {
+              const cloudData = snap.data();
+              window.__cloudSyncState.lastSyncedAt = cloudData.updatedAt || Date.now();
+              if (typeof window.applyCloudState === "function") {
+                window.applyCloudState(cloudData);
+              }
+            }
+            if (typeof window.updateCloudSyncBadge === "function") {
+              window.updateCloudSyncBadge("cloud", "Live Firestore Sync Active");
+            }
+          },
+          () => {
+            window.__cloudSyncState.mode = "local";
+            window.__cloudSyncState.connected = false;
+            if (typeof window.updateCloudSyncBadge === "function") {
+              window.updateCloudSyncBadge("local", "Firestore unreachable — Local Mode");
+            }
+          }
+        );
+      } catch (e) {
+        window.syncFamilyToCloud = async () => false;
+      }
+    }
+  </script>
+
+  <style>
+    /* =========================================================================
+       GRADE-ADAPTIVE THEME TOKENS
+       ========================================================================= */
+    :root {
+      --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-heading: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --transition-theme: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+    }
+
+    /* Elementary (K-5): Bright, Warm, Playful */
+    html[data-theme="elementary"] {
+      --bg-page: #FFFBF0;
+      --bg-surface: #FFFFFF;
+      --bg-surface-2: #FEF3C7;
+      --bg-input: #FFFFFF;
+      --text-primary: #1E293B;
+      --text-secondary: #475569;
+      --text-muted: #64748B;
+      --border-color: #FDE68A;
+      --border-strong: #F59E0B;
+      --accent: #0284C7;
+      --accent-hover: #0369A1;
+      --accent-soft: #E0F2FE;
+      --accent-text: #0369A1;
+      --success-bg: #DCFCE7;
+      --success-text: #166534;
+      --warn-bg: #FEF9C3;
+      --warn-text: #854D0E;
+      --danger-bg: #FEE2E2;
+      --danger-text: #991B1B;
+      --card-shadow: 0 8px 24px -6px rgba(245, 158, 11, 0.16);
+      --font-heading: 'Fredoka', 'Inter', sans-serif;
+      --radius-card: 1.4rem;
+      --radius-btn: 0.9rem;
+    }
+
+    /* Middle School (6-8): Crisp Light Workspace */
+    html[data-theme="middle"] {
+      --bg-page: #F1F5F9;
+      --bg-surface: #FFFFFF;
+      --bg-surface-2: #F8FAFC;
+      --bg-input: #FFFFFF;
+      --text-primary: #0F172A;
+      --text-secondary: #334155;
+      --text-muted: #64748B;
+      --border-color: #E2E8F0;
+      --border-strong: #CBD5E1;
+      --accent: #4F46E5;
+      --accent-hover: #4338CA;
+      --accent-soft: #EEF2FF;
+      --accent-text: #3730A3;
+      --success-bg: #ECFDF5;
+      --success-text: #065F46;
+      --warn-bg: #FFFBEB;
+      --warn-text: #92400E;
+      --danger-bg: #FEF2F2;
+      --danger-text: #991B1B;
+      --card-shadow: 0 4px 20px -4px rgba(15, 23, 42, 0.08);
+      --font-heading: 'Inter', sans-serif;
+      --radius-card: 1rem;
+      --radius-btn: 0.75rem;
+    }
+
+    /* High School (9-12): Sleek Dark Slate */
+    html[data-theme="high"] {
+      --bg-page: #0B1120;
+      --bg-surface: #111827;
+      --bg-surface-2: #1E293B;
+      --bg-input: #0F172A;
+      --text-primary: #F8FAFC;
+      --text-secondary: #CBD5E1;
+      --text-muted: #94A3B8;
+      --border-color: #1E293B;
+      --border-strong: #334155;
+      --accent: #3B82F6;
+      --accent-hover: #2563EB;
+      --accent-soft: rgba(59, 130, 246, 0.16);
+      --accent-text: #93C5FD;
+      --success-bg: rgba(16, 185, 129, 0.15);
+      --success-text: #6EE7B7;
+      --warn-bg: rgba(245, 158, 11, 0.15);
+      --warn-text: #FCD34D;
+      --danger-bg: rgba(244, 63, 94, 0.15);
+      --danger-text: #FDA4AF;
+      --card-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+      --font-heading: 'Inter', sans-serif;
+      --radius-card: 1rem;
+      --radius-btn: 0.75rem;
+    }
+
+    /* College / Parent Admin: Executive Obsidian & Amber */
+    html[data-theme="college"] {
+      --bg-page: #09090B;
+      --bg-surface: #121216;
+      --bg-surface-2: #1C1C22;
+      --bg-input: #0E0E11;
+      --text-primary: #FAFAFA;
+      --text-secondary: #D4D4D8;
+      --text-muted: #A1A1AA;
+      --border-color: #27272A;
+      --border-strong: #3F3F46;
+      --accent: #D97706;
+      --accent-hover: #B45309;
+      --accent-soft: rgba(217, 119, 6, 0.16);
+      --accent-text: #FCD34D;
+      --success-bg: rgba(16, 185, 129, 0.15);
+      --success-text: #6EE7B7;
+      --warn-bg: rgba(245, 158, 11, 0.15);
+      --warn-text: #FCD34D;
+      --danger-bg: rgba(244, 63, 94, 0.15);
+      --danger-text: #FDA4AF;
+      --card-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.75);
+      --font-heading: 'Inter', sans-serif;
+      --radius-card: 0.875rem;
+      --radius-btn: 0.625rem;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      transition: var(--transition-theme);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3, h4, .font-heading { font-family: var(--font-heading); }
+
+    .themed-card {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-card);
+      box-shadow: var(--card-shadow);
+      transition: var(--transition-theme);
+    }
+
+    .themed-subcard {
+      background-color: var(--bg-surface-2);
+      border: 1px solid var(--border-color);
+      border-radius: calc(var(--radius-card) - 0.25rem);
+      transition: var(--transition-theme);
+    }
+
+    .themed-input {
+      background-color: var(--bg-input);
+      border: 1px solid var(--border-strong);
+      color: var(--text-primary);
+      border-radius: var(--radius-btn);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .themed-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .themed-input::placeholder { color: var(--text-muted); }
+
+    .btn-primary {
+      background-color: var(--accent);
+      color: #FFFFFF;
+      border-radius: var(--radius-btn);
+      transition: all 0.2s ease;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background-color: var(--accent-hover);
+      transform: translateY(-1px);
+    }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .btn-secondary {
+      background-color: var(--bg-surface-2);
+      color: var(--text-primary);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-btn);
+      transition: all 0.2s ease;
+    }
+    .btn-secondary:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent-text);
+    }
+
+    .accent-badge { background-color: var(--accent-soft); color: var(--accent-text); }
+    .success-box { background-color: var(--success-bg); color: var(--success-text); }
+    .warn-box { background-color: var(--warn-bg); color: var(--warn-text); }
+    .danger-box { background-color: var(--danger-bg); color: var(--danger-text); }
+
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.4rem 0; max-width: 100%; }
+
+    /* 3D Flashcard Flip */
+    .perspective-1000 { perspective: 1000px; }
+    .flashcard-inner {
+      position: relative; width: 100%; height: 100%;
+      transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+      transform-style: preserve-3d;
+    }
+    .flashcard-inner.is-flipped { transform: rotateY(180deg); }
+    .flashcard-face {
+      position: absolute; inset: 0;
+      backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    }
+    .flashcard-back { transform: rotateY(180deg); }
+
+    /* Periodic Table Grid */
+    .ptable-grid { display: grid; grid-template-columns: repeat(18, minmax(42px, 1fr)); gap: 3px; }
+    .ptable-cell {
+      aspect-ratio: 1 / 1.05; border-radius: 6px; padding: 2px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform 0.15s ease; border: 1px solid rgba(255,255,255,0.12);
+    }
+    .ptable-cell:hover { transform: scale(1.14); z-index: 10; }
+
+    /* Shimmer & Recording */
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    .loading-bar { background: linear-gradient(90deg, transparent, var(--accent), transparent); background-size: 200% 100%; animation: shimmer 1.4s infinite linear; }
+    @keyframes pulseRing {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.65); }
+      70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .mic-recording { background-color: #EF4444 !important; color: #FFFFFF !important; border-color: #EF4444 !important; animation: pulseRing 1.2s infinite; }
+
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+  </style>
+</head>
+<body class="antialiased selection:bg-blue-500/30">
+
+  <!-- =========================================================================
+       NETFLIX-STYLE MULTI-USER FAMILY PROFILE SWITCHER OVERLAY
+       ========================================================================= -->
+  <div id="profileSwitcherOverlay" class="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 sm:p-8 overflow-y-auto"
+       style="background: radial-gradient(circle at top, #1E293B 0%, #090D16 70%); color: #F8FAFC;">
+    <div class="w-full max-w-4xl space-y-8 text-center my-auto py-6">
+      <div class="space-y-2">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/15 border border-blue-400/30 text-blue-300 text-xs font-bold">
+          <i data-lucide="graduation-cap" class="w-4 h-4"></i> OmniScholar AI Pro • Multi-User Family Edition
+        </div>
+        <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight text-white">Who's learning today?</h1>
+        <p class="text-sm text-slate-400">Select your profile to load your private Study Vault, Grade-Adaptive UI & Mastery Heatmap.</p>
+      </div>
+
+      <!-- Profile Cards Grid -->
+      <div id="profileCardsGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 max-w-3xl mx-auto"></div>
+
+      <!-- PIN Prompt Box (shown when a profile is clicked) -->
+      <div id="pinEntryPanel" class="hidden max-w-xs mx-auto p-5 rounded-2xl bg-slate-900/90 border border-slate-700 space-y-3 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2 text-left">
+            <span id="pinProfileAvatar" class="text-2xl">🎧</span>
+            <div>
+              <div id="pinProfileName" class="font-bold text-sm text-white">Maya</div>
+              <div id="pinProfileHint" class="text-[11px] text-slate-400">Enter 4-digit PIN</div>
+            </div>
+          </div>
+          <button onclick="cancelPinEntry()" class="text-slate-400 hover:text-white p-1"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+        <input id="switcherPinInput" type="password" inputmode="numeric" maxlength="4"
+               class="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-center text-xl font-mono tracking-[0.5em] text-white focus:outline-none focus:border-blue-500"
+               placeholder="••••" onkeydown="if(event.key==='Enter') verifyProfilePin()" />
+        <button onclick="verifyProfilePin()" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm transition">
+          Sign In
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       TOP BAR: BRAND, ACTIVE PROFILE, CLASS-NOTES, POMODORO, STEM LAB
+       ========================================================================= -->
+  <header class="sticky top-0 z-40 backdrop-blur-md border-b" style="background-color: color-mix(in srgb, var(--bg-surface) 92%, transparent); border-color: var(--border-color);">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 space-y-2">
+      <!-- Row 1: Brand + Profile Badge + Global Utilities -->
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-md shrink-0" style="background: linear-gradient(135deg, var(--accent), var(--accent-hover));">
+            <i data-lucide="graduation-cap" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-base font-extrabold tracking-tight">OmniScholar <span class="text-[11px] px-1.5 py-0.5 rounded-md accent-badge">FAMILY</span></h1>
+              <span id="gradeBadgeHeader" class="hidden sm:inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full accent-badge">High School</span>
+            </div>
+            <p id="activeProfileMeta" class="text-[11px]" style="color: var(--text-muted);">Loading profile...</p>
+          </div>
+        </div>
+
+        <!-- Right Controls -->
+        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <!-- Cloud Sync Status Badge -->
+          <button id="cloudSyncStatusBadge" onclick="handleSyncBadgeClick()" class="px-2.5 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1.5 border transition-all warn-box" title="Cloud Sync Status">
+            <span id="cloudSyncBadgeText">💾 Local Mode</span>
+          </button>
+
+          <!-- Stop Audio -->
+          <button id="stopAudioBtn" onclick="stopSpeaking()" class="hidden items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 text-white shadow">
+            <i data-lucide="volume-x" class="w-3.5 h-3.5"></i> Stop
+          </button>
+
+          <!-- Class-Notes Grounding Button -->
+          <button id="classNotesBtn" onclick="openClassNotesModal()" class="btn-secondary px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1.5" title="Ground AI strictly in Teacher Class Notes">
+            <i data-lucide="book-marked" class="w-3.5 h-3.5"></i>
+            <span class="hidden md:inline">Class Notes</span>
+            <span id="classNotesActiveDot" class="hidden w-2 h-2 rounded-full bg-emerald-500"></span>
+          </button>
+
+          <!-- Pomodoro Timer -->
+          <div class="flex items-center gap-1 px-2 py-1 rounded-xl border text-xs" style="background-color: var(--bg-surface-2); border-color: var(--border-color);">
+            <button onclick="togglePomodoroMode()" id="pomoModeBtn" class="font-bold px-1.5 py-0.5 rounded accent-badge">25m</button>
+            <span id="pomoDisplay" class="font-mono font-bold text-xs min-w-[40px] text-center">25:00</span>
+            <button onclick="togglePomodoroRun()" id="pomoPlayBtn" class="p-1"><i data-lucide="play" class="w-3.5 h-3.5"></i></button>
+            <button onclick="resetPomodoro()" class="p-1"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i></button>
+          </div>
+
+          <!-- STEM Lab -->
+          <button onclick="openStemDrawer()" class="btn-secondary px-2.5 py-1.5 text-xs font-bold flex items-center gap-1.5">
+            <i data-lucide="atom" class="w-3.5 h-3.5" style="color: var(--accent);"></i>
+            <span class="hidden sm:inline">STEM Lab</span>
+          </button>
+
+          <!-- Profile Switcher Pill -->
+          <button onclick="openProfileSwitcher()" class="btn-primary px-2.5 py-1.5 text-xs font-bold flex items-center gap-1.5 shadow-sm">
+            <span id="topProfileAvatar">🎓</span>
+            <span id="topProfileName">Profile</span>
+            <span id="topProfileXP" class="hidden sm:inline px-1.5 py-0.5 rounded bg-black/20 text-[10px]">0 XP</span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Row 2: Workspace Navigation Tabs + Dual Mode Toggle -->
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 pt-1.5 border-t" style="border-color: var(--border-color);">
+        <nav class="flex items-center gap-1 overflow-x-auto pb-0.5" aria-label="Workspaces">
+          <button onclick="switchTab('homework')" data-tab-btn="homework" class="tab-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap">
+            <i data-lucide="scan-line" class="w-3.5 h-3.5"></i> Homework
+          </button>
+          <button onclick="switchTab('math')" data-tab-btn="math" class="tab-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap">
+            <i data-lucide="sigma" class="w-3.5 h-3.5"></i> Math & Graph
+          </button>
+          <button onclick="switchTab('essay')" data-tab-btn="essay" class="tab-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap">
+            <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i> Essay
+          </button>
+          <button onclick="switchTab('feynman')" data-tab-btn="feynman" class="tab-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap">
+            <i data-lucide="message-square-heart" class="w-3.5 h-3.5"></i> Feynman Mode
+          </button>
+          <button onclick="switchTab('podcasts')" data-tab-btn="podcasts" class="tab-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap">
+            <i data-lucide="headphones" class="w-3.5 h-3.5"></i> Podcasts
+          </button>
+          <button onclick="switchTab('battles')" data-tab-btn="battles" class="tab-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap">
+            <i data-lucide="swords" class="w-3.5 h-3.5"></i> Sibling Battles
+          </button>
+          <button onclick="switchTab('planner')" data-tab-btn="planner" class="tab-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap">
+            <i data-lucide="calendar-check" class="w-3.5 h-3.5"></i> Planner
+          </button>
+          <button onclick="switchTab('vault')" data-tab-btn="vault" class="tab-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap">
+            <i data-lucide="library" class="w-3.5 h-3.5"></i> Vault & Mastery
+          </button>
+          <button id="parentNavBtn" onclick="switchTab('parent')" data-tab-btn="parent" class="hidden tab-btn items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap warn-box">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Parent Command
+          </button>
+        </nav>
+
+        <!-- Dual Mode Toggle & Rewards Button -->
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="kidRewardsBtn" onclick="openKidRewardsModal()" class="btn-secondary px-2.5 py-1 text-[11px] font-bold flex items-center gap-1">
+            🎁 Rewards
+          </button>
+          <div class="flex items-center p-0.5 rounded-xl border" style="background-color: var(--bg-surface-2); border-color: var(--border-color);">
+            <button id="modeSolverBtn" onclick="setLearningMode('solver')" data-mode-btn="solver" class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap">
+              <i data-lucide="sparkles" class="w-3 h-3"></i> Step-by-Step
+            </button>
+            <button id="modeSocraticBtn" onclick="setLearningMode('socratic')" data-mode-btn="socratic" class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap">
+              <i data-lucide="compass" class="w-3 h-3"></i> Socratic
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Active Grounding Banner (Visible when Class Notes Grounding is ON) -->
+  <div id="groundingBanner" class="hidden max-w-7xl mx-auto px-3 sm:px-6 pt-3">
+    <div class="px-4 py-2 rounded-xl success-box flex items-center justify-between text-xs font-bold">
+      <div class="flex items-center gap-2">
+        <i data-lucide="book-marked" class="w-4 h-4"></i>
+        <span>Class-Notes Grounding ACTIVE — All AI tutoring is strictly anchored to your uploaded teacher notes.</span>
+      </div>
+      <button onclick="openClassNotesModal()" class="underline">Manage Notes</button>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MAIN WORKSPACES CONTAINER
+       ========================================================================= -->
+  <main class="max-w-7xl mx-auto px-3 sm:px-6 py-5 space-y-5">
+
+    <!-- Quick-Try Presets Bar -->
+    <section class="themed-card px-4 py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <div class="flex items-center gap-2 text-xs font-bold" style="color: var(--text-secondary);">
+        <i data-lucide="zap" class="w-4 h-4 shrink-0" style="color: var(--accent);"></i>
+        <span>Quick-Try Presets:</span>
+      </div>
+      <div class="flex flex-wrap items-center gap-1.5">
+        <button onclick="loadPreset('fractions')" class="btn-secondary text-[11px] font-semibold px-2.5 py-1">🍕 Fractions</button>
+        <button onclick="loadPreset('mistake')" class="btn-secondary text-[11px] font-semibold px-2.5 py-1">🔍 Mistake Finder</button>
+        <button onclick="loadPreset('calculus')" class="btn-secondary text-[11px] font-semibold px-2.5 py-1">∫ Calculus + Graph</button>
+        <button onclick="loadPreset('essay')" class="btn-secondary text-[11px] font-semibold px-2.5 py-1">📜 Rubric Essay</button>
+        <button onclick="loadPreset('feynman')" class="btn-secondary text-[11px] font-semibold px-2.5 py-1">🧠 Feynman Demo</button>
+        <button onclick="loadPreset('podcast')" class="btn-secondary text-[11px] font-semibold px-2.5 py-1">🎧 Study Podcast</button>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         TAB 1: HOMEWORK SOLVER & STEP-BY-STEP MISTAKE FINDER
+         ======================================================================= -->
+    <section id="tab-homework" class="tab-panel space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="inline-flex p-1 rounded-xl border" style="background-color: var(--bg-surface); border-color: var(--border-color);">
+          <button onclick="setHwSubMode('solve')" id="hwSubSolveBtn" class="px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Solve Homework
+          </button>
+          <button onclick="setHwSubMode('mistake')" id="hwSubMistakeBtn" class="px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
+            <i data-lucide="search-check" class="w-3.5 h-3.5"></i> Step-by-Step Mistake Finder
+          </button>
+        </div>
+
+        <!-- "Explain It My Way" Interest-Driven Tutoring Toggle -->
+        <button id="hwInterestChip" onclick="toggleExplainMyWay()" class="px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all flex items-center gap-1.5">
+          <span>✨ Explain It My Way:</span>
+          <span id="hwInterestLabel" class="underline">ON</span>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div class="lg:col-span-5 space-y-4">
+          <div class="themed-card p-5 space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] font-bold uppercase mb-1" style="color: var(--text-muted);">Subject</label>
+                <select id="hwSubject" class="themed-input w-full px-3 py-2 text-sm">
+                  <option value="Auto-Detect">✨ Auto-Detect</option>
+                  <option value="Math">📐 Math</option>
+                  <option value="Science">🔬 Science</option>
+                  <option value="History">🌍 History</option>
+                  <option value="English">📖 English</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold uppercase mb-1" style="color: var(--text-muted);">Problem #s</label>
+                <input id="hwProblemNumbers" type="text" class="themed-input w-full px-3 py-2 text-sm" placeholder="e.g., #2, #4" />
+              </div>
+            </div>
+
+            <!-- Batch Image & PDF Upload -->
+            <div id="hwDropZone" class="border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer"
+                 style="border-color: var(--border-strong); background-color: var(--bg-surface-2);"
+                 onclick="document.getElementById('hwFileInput').click()">
+              <input type="file" id="hwFileInput" accept="image/*,application/pdf" multiple class="hidden" onchange="handleBatchUpload(event)" />
+              <div class="space-y-1">
+                <i data-lucide="files" class="w-6 h-6 mx-auto" style="color: var(--accent);"></i>
+                <p class="text-xs sm:text-sm font-bold">Drop Images or Multi-Page PDF</p>
+                <p class="text-[11px]" style="color: var(--text-muted);">PNG/JPG/PDF • Paste screenshot with Ctrl+V</p>
+              </div>
+            </div>
+
+            <div id="hwBatchTrayWrap" class="hidden space-y-2">
+              <div class="flex items-center justify-between text-xs">
+                <span id="hwBatchCount" class="font-bold" style="color: var(--accent-text);">0 pages</span>
+                <button onclick="clearHwBatch()" class="text-rose-500 font-semibold">Clear</button>
+              </div>
+              <div id="hwBatchTray" class="grid grid-cols-4 gap-2 max-h-36 overflow-y-auto"></div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label id="hwTextLabel" class="text-[11px] font-bold uppercase" style="color: var(--text-muted);">Question or Completed Work</label>
+                <button type="button" id="hwVoiceBtn" onclick="toggleVoiceDictation('hwTextInput', 'hwVoiceBtn')" class="btn-secondary px-2 py-1 text-[11px] font-bold flex items-center gap-1">
+                  <i data-lucide="mic" class="w-3 h-3"></i> Voice
+                </button>
+              </div>
+              <textarea id="hwTextInput" rows="4" class="themed-input w-full p-3 text-sm resize-y" placeholder="Type, dictate, or paste your homework..."></textarea>
+            </div>
+
+            <button id="hwSolveBtn" onclick="runHomeworkPipeline()" class="btn-primary w-full py-3 font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
+              <i data-lucide="sparkles" class="w-4 h-4"></i>
+              <span id="hwSolveBtnLabel">Analyze & Solve Step-by-Step</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="lg:col-span-7">
+          <div class="themed-card p-5 sm:p-6 min-h-[460px] flex flex-col">
+            <div id="hwEmptyState" class="flex-1 flex flex-col items-center justify-center text-center py-10 space-y-3">
+              <div class="w-14 h-14 rounded-2xl flex items-center justify-center accent-badge"><i data-lucide="brain-circuit" class="w-7 h-7"></i></div>
+              <h3 class="text-lg font-bold">Smart Homework & Mistake Finder</h3>
+              <p class="text-sm max-w-md" style="color: var(--text-muted);">Toggle <strong>Explain It My Way</strong> to get analogies tailored to your profile's interests, or switch to <strong>Mistake Finder</strong> to check your completed steps.</p>
+            </div>
+            <div id="hwLoadingState" class="hidden flex-1 flex flex-col items-center justify-center text-center py-12 space-y-3">
+              <i data-lucide="loader-2" class="w-8 h-8 animate-spin" style="color: var(--accent);"></i>
+              <p id="hwLoadingText" class="font-bold text-sm">Analyzing your work...</p>
+              <div class="w-56 h-1.5 rounded-full overflow-hidden" style="background-color: var(--bg-surface-2);"><div class="w-full h-full loading-bar"></div></div>
+            </div>
+            <div id="hwOutputContent" class="hidden space-y-4"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         TAB 2: MATH BREAKDOWN STUDIO, DRAW-TO-SOLVE & 2D GRAPHING CALCULATOR
+         ======================================================================= -->
+    <section id="tab-math" class="tab-panel hidden space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-base sm:text-lg font-bold flex items-center gap-2"><i data-lucide="sigma" class="w-5 h-5" style="color: var(--accent);"></i> Math Breakdown & 2D Graphing Studio</h2>
+        <button id="mathInterestChip" onclick="toggleExplainMyWay()" class="px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5">
+          <span>✨ Explain It My Way:</span> <span id="mathInterestLabel" class="underline">ON</span>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div class="lg:col-span-6 space-y-5">
+          <div class="themed-card p-5 space-y-4">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold uppercase" style="color: var(--text-muted);">Input Method</span>
+              <div class="flex p-0.5 rounded-xl border text-xs" style="background-color: var(--bg-surface-2); border-color: var(--border-color);">
+                <button onclick="setMathInputMode('type')" id="mathModeTypeBtn" class="px-2.5 py-1 rounded-lg font-bold">Type / Pad</button>
+                <button onclick="setMathInputMode('draw')" id="mathModeDrawBtn" class="px-2.5 py-1 rounded-lg font-bold">✏️ Draw-to-Solve</button>
+                <button onclick="setMathInputMode('photo')" id="mathModePhotoBtn" class="px-2.5 py-1 rounded-lg font-bold">📷 Photo</button>
+              </div>
+            </div>
+
+            <!-- Type / Symbol Pad -->
+            <div id="mathPanelType" class="space-y-3">
+              <div class="grid grid-cols-4 sm:grid-cols-8 gap-1.5" id="mathSymbolPad"></div>
+              <textarea id="mathInput" rows="3" oninput="updateMathPreview()" class="themed-input w-full p-3 text-sm font-mono" placeholder="e.g., \int_{0}^{2} (3x^2 - 4x + 5) \, dx"></textarea>
+              <div class="themed-subcard p-3">
+                <div class="text-[10px] font-bold uppercase mb-1" style="color: var(--text-muted);">Live KaTeX 0.19.1 Preview</div>
+                <div id="mathLivePreview" class="min-h-[34px] flex items-center justify-center text-base overflow-x-auto"><span class="text-xs italic" style="color: var(--text-muted);">Equation preview...</span></div>
+              </div>
+              <button onclick="solveMathStudio('type')" class="btn-primary w-full py-2.5 font-bold text-sm flex items-center justify-center gap-2"><i data-lucide="calculator" class="w-4 h-4"></i> Break Down Equation</button>
+            </div>
+
+            <!-- Draw-to-Solve Canvas -->
+            <div id="mathPanelDraw" class="hidden space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-1.5">
+                  <button onclick="setScratchColor('#0F172A')" class="w-5 h-5 rounded-full bg-slate-900 border border-white"></button>
+                  <button onclick="setScratchColor('#2563EB')" class="w-5 h-5 rounded-full bg-blue-600 border border-white"></button>
+                  <button onclick="setScratchColor('#DC2626')" class="w-5 h-5 rounded-full bg-red-600 border border-white"></button>
+                  <button id="scratchEraserBtn" onclick="toggleScratchEraser()" class="btn-secondary px-2 py-1 font-semibold">Eraser</button>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <input id="scratchWidth" type="range" min="2" max="12" value="4" class="w-16" />
+                  <button onclick="undoScratchpad()" class="btn-secondary px-2 py-1"><i data-lucide="undo-2" class="w-3.5 h-3.5"></i></button>
+                  <button onclick="clearScratchpad()" class="btn-secondary px-2 py-1 text-rose-500"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                </div>
+              </div>
+              <div id="scratchContainer" class="w-full h-52 rounded-xl overflow-hidden border-2 bg-white touch-none" style="border-color: var(--border-strong);">
+                <canvas id="scratchCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+              </div>
+              <button onclick="solveMathStudio('draw')" class="btn-primary w-full py-2.5 font-bold text-sm">Send Drawing to AI Solver</button>
+            </div>
+
+            <!-- Photo -->
+            <div id="mathPanelPhoto" class="hidden space-y-3">
+              <div class="border-2 border-dashed rounded-xl p-5 text-center cursor-pointer" style="border-color: var(--border-strong);" onclick="document.getElementById('mathFileInput').click()">
+                <input type="file" id="mathFileInput" accept="image/*" class="hidden" onchange="handleMathPhotoUpload(event)" />
+                <div id="mathPhotoPlaceholder"><i data-lucide="camera" class="w-6 h-6 mx-auto mb-1" style="color: var(--accent);"></i><p class="text-xs font-bold">Upload Math Photo</p></div>
+                <div id="mathPhotoPreviewWrap" class="hidden"><img id="mathPreviewImg" src="" alt="Math" class="max-h-40 mx-auto rounded-lg" /></div>
+              </div>
+              <button onclick="solveMathStudio('photo')" class="btn-primary w-full py-2.5 font-bold text-sm">OCR & Solve Photo</button>
+            </div>
+          </div>
+
+          <!-- 2D Graphing Calculator -->
+          <div class="themed-card p-5 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h3 class="text-sm font-bold flex items-center gap-1.5"><i data-lucide="line-chart" class="w-4 h-4" style="color: var(--accent);"></i> 2D Graphing Calculator</h3>
+              <div class="flex items-center gap-1.5 text-xs">
+                <label class="flex items-center gap-1 px-2 py-1 rounded themed-subcard cursor-pointer"><input type="checkbox" id="graphShowDeriv" onchange="drawGraph()" /> f'(x)</label>
+                <button onclick="zoomGraph(0.8)" class="btn-secondary px-2 py-0.5 font-bold">+</button>
+                <button onclick="zoomGraph(1.25)" class="btn-secondary px-2 py-0.5 font-bold">−</button>
+                <button onclick="resetGraphView()" class="btn-secondary px-2 py-0.5">Reset</button>
+              </div>
+            </div>
+            <div id="graphEqList" class="space-y-1.5"></div>
+            <button onclick="addGraphEquation('')" class="btn-secondary px-2.5 py-1 text-xs font-semibold">+ Add Curve</button>
+            <div id="graphContainer" class="relative w-full h-60 rounded-xl overflow-hidden border touch-none" style="border-color: var(--border-strong);">
+              <canvas id="graphCanvas" class="w-full h-full block cursor-grab"></canvas>
+              <div id="graphCoordBadge" class="absolute bottom-2 left-2 px-2 py-0.5 rounded text-[11px] font-mono font-bold pointer-events-none" style="background-color: var(--bg-surface); border: 1px solid var(--border-color);">x: 0.00, y: 0.00</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lg:col-span-6">
+          <div class="themed-card p-5 sm:p-6 min-h-[560px] flex flex-col">
+            <div id="mathEmptyState" class="flex-1 flex flex-col items-center justify-center text-center py-12 space-y-3">
+              <div class="w-14 h-14 rounded-2xl flex items-center justify-center accent-badge"><i data-lucide="function-square" class="w-7 h-7"></i></div>
+              <h3 class="text-lg font-bold">Precision Math Breakdown</h3>
+              <p class="text-sm max-w-sm" style="color: var(--text-muted);">Type, draw, or snap a math problem for KaTeX-rendered steps and exam-trap alerts.</p>
+            </div>
+            <div id="mathLoadingState" class="hidden flex-1 flex flex-col items-center justify-center py-12 space-y-3">
+              <i data-lucide="loader-2" class="w-8 h-8 animate-spin" style="color: var(--accent);"></i>
+              <p class="font-bold text-sm">Verifying mathematical transformations...</p>
+            </div>
+            <div id="mathOutputContent" class="hidden space-y-4"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         TAB 3: ESSAY STUDIO (RUBRIC GRADING + GENERATOR)
+         ======================================================================= -->
+    <section id="tab-essay" class="tab-panel hidden space-y-4">
+      <div class="inline-flex p-1 rounded-xl border" style="background-color: var(--bg-surface); border-color: var(--border-color);">
+        <button onclick="setEssayMode('proofread')" id="essayModeProofBtn" class="px-3.5 py-1.5 rounded-lg text-xs font-bold">Proofread & Rubric Coach</button>
+        <button onclick="setEssayMode('generate')" id="essayModeGenBtn" class="px-3.5 py-1.5 rounded-lg text-xs font-bold">Essay Generator & Citations</button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div class="lg:col-span-5">
+          <div id="essayProofForm" class="themed-card p-5 space-y-4">
+            <h3 class="font-bold text-base">Rubric-Based Proofreader</h3>
+            <div class="themed-subcard p-3 space-y-2">
+              <label class="text-[11px] font-bold uppercase" style="color: var(--accent-text);">Teacher Rubric (Optional)</label>
+              <textarea id="rubricTextInput" rows="3" class="themed-input w-full p-2 text-xs" placeholder="Paste rubric point criteria..."></textarea>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold uppercase mb-1" style="color: var(--text-muted);">Essay Draft</label>
+              <textarea id="proofDraftInput" rows="7" class="themed-input w-full p-3 text-sm" placeholder="Paste your essay draft here..."></textarea>
+            </div>
+            <button onclick="runEssayProofread()" class="btn-primary w-full py-2.5 font-bold text-sm">Grade Against Rubric & Polish</button>
+          </div>
+
+          <div id="essayGenForm" class="themed-card p-5 space-y-4 hidden">
+            <h3 class="font-bold text-base">Essay Generator</h3>
+            <textarea id="genTopicInput" rows="4" class="themed-input w-full p-3 text-sm" placeholder="Enter your essay prompt..."></textarea>
+            <div class="grid grid-cols-2 gap-3">
+              <select id="genTypeInput" class="themed-input px-3 py-2 text-sm">
+                <option value="Argumentative">Argumentative</option><option value="Analytical">Analytical</option><option value="Expository">Expository</option>
+              </select>
+              <select id="genCitationInput" class="themed-input px-3 py-2 text-sm">
+                <option value="MLA">MLA</option><option value="APA">APA</option><option value="Chicago">Chicago</option><option value="None">None</option>
+              </select>
+            </div>
+            <button onclick="runEssayGenerator()" class="btn-primary w-full py-2.5 font-bold text-sm">Generate Essay</button>
+          </div>
+        </div>
+
+        <div class="lg:col-span-7">
+          <div class="themed-card p-5 sm:p-6 min-h-[460px] flex flex-col">
+            <div id="essayEmptyState" class="flex-1 flex flex-col items-center justify-center text-center py-12 space-y-2">
+              <i data-lucide="book-open-check" class="w-10 h-10" style="color: var(--accent);"></i>
+              <h3 class="font-bold text-lg">Rubric-Aware Writing Studio</h3>
+              <p class="text-sm max-w-sm" style="color: var(--text-muted);">Grade drafts against teacher rubrics or generate cited papers with .DOC/.TXT export.</p>
+            </div>
+            <div id="essayLoadingState" class="hidden flex-1 flex flex-col items-center justify-center py-12 space-y-3">
+              <i data-lucide="loader-2" class="w-8 h-8 animate-spin" style="color: var(--accent);"></i>
+              <p class="font-bold text-sm">Evaluating & refining writing...</p>
+            </div>
+            <div id="essayOutputContent" class="hidden space-y-4"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         TAB 4: FEYNMAN MODE ("TEACH THE AI")
+         ======================================================================= -->
+    <section id="tab-feynman" class="tab-panel hidden space-y-4">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div class="lg:col-span-4 space-y-4">
+          <div class="themed-card p-5 space-y-4">
+            <div class="flex items-center gap-2">
+              <div class="w-10 h-10 rounded-xl accent-badge flex items-center justify-center"><i data-lucide="message-square-heart" class="w-5 h-5"></i></div>
+              <div>
+                <h2 class="font-bold text-base">Feynman Mode</h2>
+                <p class="text-xs" style="color: var(--text-muted);">Teach a confused AI classmate to prove mastery!</p>
+              </div>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold uppercase mb-1" style="color: var(--text-muted);">Topic You Will Teach</label>
+              <input id="feynmanTopicInput" type="text" class="themed-input w-full px-3 py-2 text-sm" placeholder="e.g., Photosynthesis, Fractions, Causes of WWII" />
+            </div>
+            <button onclick="startFeynmanSession()" class="btn-primary w-full py-2.5 font-bold text-sm flex items-center justify-center gap-2">
+              <i data-lucide="play" class="w-4 h-4"></i> Start Teaching Session
+            </button>
+
+            <!-- Live Comprehension Meter -->
+            <div class="themed-subcard p-4 space-y-2">
+              <div class="flex items-center justify-between text-xs font-bold">
+                <span>AI Comprehension Score</span>
+                <span id="feynmanScoreText" style="color: var(--accent-text);">0%</span>
+              </div>
+              <div class="w-full h-2.5 rounded-full overflow-hidden" style="background-color: var(--bg-surface);">
+                <div id="feynmanScoreBar" class="h-full bg-emerald-500 transition-all duration-500" style="width: 0%;"></div>
+              </div>
+              <p class="text-[11px]" style="color: var(--text-muted);">Reach <strong>80%+</strong> to earn <strong>+75 XP</strong> Mastery Bonus!</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="lg:col-span-8">
+          <div class="themed-card p-5 flex flex-col h-[500px]">
+            <div id="feynmanChatBox" class="flex-1 overflow-y-auto space-y-3 pr-1">
+              <div class="text-center py-14 space-y-2">
+                <div class="text-3xl">🤔</div>
+                <h3 class="font-bold text-base">Ready to be the Teacher?</h3>
+                <p class="text-xs max-w-md mx-auto" style="color: var(--text-muted);">Enter a topic on the left and click Start. The AI will act like a curious classmate who needs you to explain it clearly—and grade how well you truly understand it.</p>
+              </div>
+            </div>
+            <div class="pt-3 mt-3 border-t flex gap-2" style="border-color: var(--border-color);">
+              <button type="button" id="feynmanVoiceBtn" onclick="toggleVoiceDictation('feynmanReplyInput', 'feynmanVoiceBtn')" class="btn-secondary px-3 py-2" title="Explain by Voice"><i data-lucide="mic" class="w-4 h-4"></i></button>
+              <input id="feynmanReplyInput" type="text" class="themed-input flex-1 px-3.5 py-2 text-sm" placeholder="Explain the concept in your own words..." onkeydown="if(event.key==='Enter') sendFeynmanExplanation()" />
+              <button id="feynmanSendBtn" onclick="sendFeynmanExplanation()" class="btn-primary px-4 py-2 text-xs font-bold">Teach</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         TAB 5: COMMUTE-READY STUDY PODCASTS (2-HOST WEB SPEECH AUDIO)
+         ======================================================================= -->
+    <section id="tab-podcasts" class="tab-panel hidden space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div class="lg:col-span-5">
+          <div class="themed-card p-5 space-y-4">
+            <h2 class="font-bold text-base flex items-center gap-2"><i data-lucide="headphones" class="w-5 h-5" style="color: var(--accent);"></i> Study Podcast Generator</h2>
+            <p class="text-xs" style="color: var(--text-muted);">Turn messy notes or a Study Vault item into a 2-host conversational audio recap you can listen to in the car.</p>
+
+            <div>
+              <label class="block text-[11px] font-bold uppercase mb-1" style="color: var(--text-muted);">Or Load From Your Study Vault</label>
+              <select id="podcastVaultSelect" onchange="loadVaultToPodcast()" class="themed-input w-full px-3 py-2 text-sm">
+                <option value="">-- Choose a saved Vault item --</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold uppercase mb-1" style="color: var(--text-muted);">Source Study Notes</label>
+              <textarea id="podcastNotesInput" rows="6" class="themed-input w-full p-3 text-sm" placeholder="Paste class notes, textbook paragraphs, or key terms..."></textarea>
+            </div>
+
+            <button id="podcastGenBtn" onclick="generateStudyPodcast()" class="btn-primary w-full py-2.5 font-bold text-sm flex items-center justify-center gap-2">
+              <i data-lucide="mic-2" class="w-4 h-4"></i> Generate 2-Host Podcast
+            </button>
+          </div>
+        </div>
+
+        <div class="lg:col-span-7">
+          <div class="themed-card p-5 space-y-4 min-h-[440px] flex flex-col">
+            <!-- Audio Player Bar -->
+            <div class="themed-subcard p-4 flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <button id="podPlayBtn" onclick="togglePodcastPlayback()" class="btn-primary px-4 py-2 text-xs font-bold flex items-center gap-1.5">
+                  <i data-lucide="play" class="w-4 h-4"></i> Play
+                </button>
+                <button onclick="stopPodcastPlayback()" class="btn-secondary px-3 py-2 text-xs font-bold">Stop</button>
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <span style="color: var(--text-muted);">Speed:</span>
+                <button onclick="setPodcastSpeed(1)" data-pod-speed="1" class="btn-secondary px-2 py-1 font-bold">1x</button>
+                <button onclick="setPodcastSpeed(1.25)" data-pod-speed="1.25" class="btn-secondary px-2 py-1 font-bold">1.25x</button>
+                <button onclick="setPodcastSpeed(1.5)" data-pod-speed="1.5" class="btn-secondary px-2 py-1 font-bold">1.5x</button>
+              </div>
+            </div>
+
+            <div id="podcastScriptBox" class="flex-1 overflow-y-auto space-y-2.5 max-h-[360px]">
+              <div class="text-center py-14 text-sm" style="color: var(--text-muted);">
+                Generate a podcast on the left to see the 2-host script (Alex & Sam) and listen with live line highlighting.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         TAB 6: GRADE-SCALED SIBLING BATTLES & FAMILY LEADERBOARD
+         ======================================================================= -->
+    <section id="tab-battles" class="tab-panel hidden space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <!-- Battle Arena -->
+        <div class="lg:col-span-8 space-y-4">
+          <div id="battleSetupCard" class="themed-card p-5 space-y-4">
+            <h2 class="text-lg font-extrabold flex items-center gap-2"><i data-lucide="swords" class="w-5 h-5" style="color: var(--accent);"></i> Grade-Scaled Sibling Battle Arena</h2>
+            <p class="text-xs" style="color: var(--text-muted);">Fair head-to-head 60-second trivia! AI scales every question to each player's own grade level.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-[11px] font-bold uppercase mb-1" style="color: var(--text-muted);">Player 1</label>
+                <select id="battleP1Select" class="themed-input w-full px-3 py-2 text-sm"></select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold uppercase mb-1" style="color: var(--text-muted);">Player 2</label>
+                <select id="battleP2Select" class="themed-input w-full px-3 py-2 text-sm"></select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold uppercase mb-1" style="color: var(--text-muted);">Topic</label>
+                <select id="battleTopicSelect" class="themed-input w-full px-3 py-2 text-sm">
+                  <option value="Mixed Academic">Mixed Academic</option>
+                  <option value="Math">Math</option>
+                  <option value="Science">Science</option>
+                  <option value="History">History</option>
+                </select>
+              </div>
+            </div>
+            <button id="startBattleBtn" onclick="startSiblingBattle()" class="btn-primary px-6 py-2.5 font-bold text-sm flex items-center gap-2">
+              <i data-lucide="flame" class="w-4 h-4"></i> Start 60-Second Battle!
+            </button>
+          </div>
+
+          <!-- Active Battle Stage -->
+          <div id="battleArenaCard" class="hidden themed-card p-6 space-y-5">
+            <div class="flex items-center justify-between border-b pb-3" style="border-color: var(--border-color);">
+              <div class="flex items-center gap-4">
+                <div class="text-center"><div id="bP1Name" class="text-xs font-bold">P1</div><div id="bP1Score" class="text-2xl font-extrabold text-blue-500">0</div></div>
+                <span class="text-xs font-extrabold px-2 py-0.5 rounded accent-badge">VS</span>
+                <div class="text-center"><div id="bP2Name" class="text-xs font-bold">P2</div><div id="bP2Score" class="text-2xl font-extrabold text-emerald-500">0</div></div>
+              </div>
+              <div class="px-3.5 py-1.5 rounded-xl font-mono font-extrabold text-lg danger-box" id="battleTimer">60s</div>
+            </div>
+
+            <div class="space-y-3">
+              <div id="battleTurnBanner" class="inline-block px-3 py-1 rounded-full text-xs font-extrabold accent-badge">Player 1's Turn</div>
+              <div id="battleQuestionText" class="text-base sm:text-lg font-bold rich-math"></div>
+              <div id="battleOptionsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5"></div>
+            </div>
+          </div>
+
+          <div id="battleResultCard" class="hidden themed-card p-6 text-center space-y-3"></div>
+        </div>
+
+        <!-- Family Leaderboard -->
+        <div class="lg:col-span-4">
+          <div class="themed-card p-5 space-y-3">
+            <h3 class="font-bold text-base flex items-center gap-2"><i data-lucide="trophy" class="w-5 h-5 text-amber-500"></i> Family Leaderboard</h3>
+            <div id="familyLeaderboardList" class="space-y-2.5"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         TAB 7: "WHAT'S DUE THIS WEEK?" ASSIGNMENT PLANNER (CANVAS/CLASSROOM SYNC)
+         ======================================================================= -->
+    <section id="tab-planner" class="tab-panel hidden space-y-4">
+      <div class="themed-card p-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-lg font-extrabold flex items-center gap-2"><i data-lucide="calendar-check" class="w-5 h-5" style="color: var(--accent);"></i> What's Due This Week?</h2>
+          <p class="text-xs" style="color: var(--text-muted);">Click any assignment to load it directly into the Homework Solver or Essay Studio.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="simulateLmsSync('Canvas')" class="btn-secondary px-3 py-1.5 text-xs font-bold flex items-center gap-1.5"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Sync Canvas</button>
+          <button onclick="simulateLmsSync('Google Classroom')" class="btn-primary px-3 py-1.5 text-xs font-bold flex items-center gap-1.5"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Sync Google Classroom</button>
+        </div>
+      </div>
+
+      <div id="plannerAssignmentsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </section>
+
+    <!-- =======================================================================
+         TAB 8: STUDY VAULT, SPACED-REPETITION, TIMED EXAMS & MASTERY HEATMAP
+         ======================================================================= -->
+    <section id="tab-vault" class="tab-panel hidden space-y-4">
+      <div class="inline-flex p-1 rounded-xl border" style="background-color: var(--bg-surface); border-color: var(--border-color);">
+        <button onclick="setVaultSubTab('items')" id="vaultSubItemsBtn" class="px-3 py-1.5 rounded-lg text-xs font-bold">Saved Vault</button>
+        <button onclick="setVaultSubTab('decks')" id="vaultSubDecksBtn" class="px-3 py-1.5 rounded-lg text-xs font-bold">Spaced-Repetition</button>
+        <button onclick="setVaultSubTab('exam')" id="vaultSubExamBtn" class="px-3 py-1.5 rounded-lg text-xs font-bold">Timed Exam</button>
+        <button onclick="setVaultSubTab('heatmap')" id="vaultSubHeatmapBtn" class="px-3 py-1.5 rounded-lg text-xs font-bold">Mastery Heatmap</button>
+      </div>
+
+      <!-- 8A: Saved Vault -->
+      <div id="vaultPanelItems" class="space-y-4">
+        <div id="vaultGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+      </div>
+
+      <!-- 8B: Spaced-Repetition Decks -->
+      <div id="vaultPanelDecks" class="hidden space-y-4">
+        <div class="themed-card p-4 flex gap-2">
+          <input id="customDeckTopic" type="text" class="themed-input flex-1 px-3 py-2 text-sm" placeholder="Generate a new flashcard deck from any topic..." />
+          <button onclick="generateFlashcardsFromCustomTopic()" class="btn-primary px-4 py-2 text-xs font-bold">Generate Deck</button>
+        </div>
+        <div id="srDecksGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+      </div>
+
+      <!-- 8C: Timed Exam Simulator -->
+      <div id="vaultPanelExam" class="hidden space-y-4">
+        <div id="examSetupCard" class="themed-card p-5 space-y-4">
+          <h3 class="font-bold text-base">Timed Exam Simulator</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <select id="examSubjectSelect" class="themed-input px-3 py-2 text-sm">
+              <option value="Algebra">Math — Algebra</option><option value="Fractions">Math — Fractions</option>
+              <option value="Biology">Science — Biology</option><option value="Chemistry">Science — Chemistry</option>
+              <option value="US History">History — US History</option><option value="Writing">English — Writing</option>
+            </select>
+            <select id="examCountSelect" class="themed-input px-3 py-2 text-sm">
+              <option value="4">4 Questions</option><option value="6">6 Questions</option>
+            </select>
+            <select id="examDurationSelect" class="themed-input px-3 py-2 text-sm">
+              <option value="5">5 Minutes</option><option value="10">10 Minutes</option>
+            </select>
+          </div>
+          <button onclick="startTimedExam()" class="btn-primary px-5 py-2.5 text-sm font-bold">Start Timed Exam</button>
+        </div>
+        <div id="examLoadingCard" class="hidden themed-card p-10 text-center"><i data-lucide="loader-2" class="w-7 h-7 animate-spin mx-auto" style="color: var(--accent);"></i><p class="mt-2 font-bold text-sm">Building your timed exam...</p></div>
+        <div id="examActiveCard" class="hidden themed-card p-5 space-y-4">
+          <div class="flex items-center justify-between border-b pb-3" style="border-color: var(--border-color);">
+            <h3 id="examActiveTitle" class="font-bold text-base">Mock Exam</h3>
+            <div class="flex items-center gap-3">
+              <span id="examCountdown" class="px-3 py-1 rounded-lg font-mono font-bold danger-box">05:00</span>
+              <button onclick="submitTimedExam()" class="btn-primary px-4 py-1.5 text-xs font-bold">Submit</button>
+            </div>
+          </div>
+          <div id="examQuestionsList" class="space-y-3"></div>
+        </div>
+        <div id="examReportCard" class="hidden themed-card p-5 space-y-4"></div>
+      </div>
+
+      <!-- 8D: Subject Mastery Heatmap -->
+      <div id="vaultPanelHeatmap" class="hidden space-y-4">
+        <div id="masteryHeatmapGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5"></div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         TAB 9: PARENT COMMAND CENTER (ADMIN ONLY)
+         ======================================================================= -->
+    <section id="tab-parent" class="tab-panel hidden space-y-5">
+      <div class="themed-card p-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <span class="text-xs font-bold px-2.5 py-0.5 rounded-full warn-box">Parent Admin View</span>
+          <h2 class="text-xl font-extrabold mt-1">Family Command Center</h2>
+          <p class="text-xs" style="color: var(--text-muted);">Monitor every child's streaks, weak subjects, AI transcripts, guardrails, and rewards.</p>
+        </div>
+        <button onclick="openAddProfileModal()" class="btn-primary px-4 py-2 text-xs font-bold flex items-center gap-1.5">
+          <i data-lucide="user-plus" class="w-4 h-4"></i> + Add Child Profile
+        </button>
+      </div>
+
+      <!-- Child Overview Cards & Per-Child Guardrails -->
+      <div id="parentChildrenGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+
+      <!-- Two-Column: Family Rewards Manager + Reviewable AI Transcripts -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <!-- Rewards Manager -->
+        <div class="lg:col-span-5 themed-card p-5 space-y-4">
+          <h3 class="font-bold text-base flex items-center gap-2">🎁 Real-World Family Rewards</h3>
+          <div class="flex gap-2">
+            <input id="newRewardTitle" type="text" class="themed-input flex-1 px-3 py-1.5 text-xs" placeholder="Reward (e.g., Pick Family Movie)" />
+            <input id="newRewardXP" type="number" value="250" class="themed-input w-20 px-2 py-1.5 text-xs font-mono" placeholder="XP" />
+            <button onclick="addFamilyReward()" class="btn-primary px-3 py-1.5 text-xs font-bold">Add</button>
+          </div>
+          <div id="parentRewardsList" class="space-y-2"></div>
+          <div class="pt-3 border-t space-y-2" style="border-color: var(--border-color);">
+            <div class="text-xs font-bold uppercase" style="color: var(--accent-text);">Pending Redemption Requests</div>
+            <div id="parentRewardRequestsList" class="space-y-2 text-xs"></div>
+          </div>
+        </div>
+
+        <!-- Reviewable AI Transcripts Log -->
+        <div class="lg:col-span-7 themed-card p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-base flex items-center gap-2"><i data-lucide="scroll-text" class="w-4 h-4" style="color: var(--accent);"></i> Reviewable AI Transcripts</h3>
+            <select id="transcriptChildFilter" onchange="renderParentDashboard()" class="themed-input px-2.5 py-1 text-xs"></select>
+          </div>
+          <div id="parentTranscriptsList" class="space-y-2.5 max-h-80 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+
+      <!-- Combined Family Due Dates -->
+      <div class="themed-card p-5 space-y-3">
+        <h3 class="font-bold text-base">📅 Combined Family Assignments Due This Week</h3>
+        <div id="parentFamilyCalendar" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
+      </div>
+
+      <!-- Vercel & Firebase Cloud Deployment Panel -->
+      <div id="parentCloudSetupPanel" class="themed-card p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b" style="border-color: var(--border-color);">
+          <div>
+            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full accent-badge">Production Deployment</span>
+            <h3 class="font-extrabold text-base mt-1 flex items-center gap-2">
+              <i data-lucide="cloud" class="w-4 h-4" style="color: var(--accent);"></i> Vercel & Firebase Cloud Setup
+            </h3>
+            <p class="text-xs" style="color: var(--text-muted);">Monitor live Firestore sync, test your hidden <code>/api/gemini</code> route, and copy backend files for Vercel.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="testVercelApiConnection()" id="testApiBtn" class="btn-secondary px-3 py-1.5 text-xs font-bold flex items-center gap-1.5">
+              <i data-lucide="activity" class="w-3.5 h-3.5"></i> Test /api/gemini Connection
+            </button>
+            <button onclick="forceSyncFamilyNow()" class="btn-primary px-3 py-1.5 text-xs font-bold flex items-center gap-1.5">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Force Sync Now
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <div class="themed-subcard p-3.5 space-y-1">
+            <div class="font-bold uppercase text-[10px]" style="color: var(--text-muted);">Firestore Sync Status</div>
+            <div id="parentSyncStatusText" class="font-extrabold text-sm">💾 Local Mode</div>
+            <div id="parentSyncDetailText" style="color: var(--text-muted);">Replace FIREBASE_CONFIG in index.html to sync across devices.</div>
+          </div>
+          <div class="themed-subcard p-3.5 space-y-1">
+            <div class="font-bold uppercase text-[10px]" style="color: var(--text-muted);">Active AI Backend Route</div>
+            <div id="parentAiRouteText" class="font-extrabold text-sm">Auto (Vercel /api/gemini → Preview)</div>
+            <div id="parentApiTestResult" style="color: var(--text-muted);">Click "Test /api/gemini Connection" to verify.</div>
+          </div>
+          <div class="themed-subcard p-3.5 space-y-1">
+            <div class="font-bold uppercase text-[10px]" style="color: var(--text-muted);">Last Cloud Sync</div>
+            <div id="parentLastSyncTime" class="font-extrabold text-sm font-mono">Not synced yet</div>
+            <div style="color: var(--text-muted);">Offline cache: localStorage active</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="themed-subcard p-3.5 flex items-center justify-between gap-2">
+            <div>
+              <div class="font-bold text-xs font-mono">api/gemini.js</div>
+              <div class="text-[11px]" style="color: var(--text-muted);">Vercel serverless proxy hiding GEMINI_API_KEY</div>
+            </div>
+            <button onclick="copyDeploymentSnippet('gemini')" class="btn-secondary px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 shrink-0">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy api/gemini.js
+            </button>
+          </div>
+          <div class="themed-subcard p-3.5 flex items-center justify-between gap-2">
+            <div>
+              <div class="font-bold text-xs font-mono">package.json</div>
+              <div class="text-[11px]" style="color: var(--text-muted);">Installs @google/genai ^3.6.1 on Vercel</div>
+            </div>
+            <button onclick="copyDeploymentSnippet('package')" class="btn-secondary px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 shrink-0">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy package.json
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- =========================================================================
+       MODALS: ADD PROFILE, CLASS-NOTES GROUNDING, KID REWARDS, STEM LAB, FLASHCARDS
+       ========================================================================= -->
+
+  <!-- Modal: Add New Profile -->
+  <div id="addProfileModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div class="themed-card w-full max-w-md p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-lg">Add Family Profile</h3>
+        <button onclick="closeModal('addProfileModal')" class="btn-secondary p-1.5"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="space-y-3 text-sm">
+        <div class="grid grid-cols-4 gap-2">
+          <input id="newProfAvatar" type="text" value="🚀" class="themed-input px-3 py-2 text-center text-xl" />
+          <input id="newProfName" type="text" class="themed-input col-span-3 px-3 py-2" placeholder="Child's Name" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <select id="newProfGrade" class="themed-input px-3 py-2">
+            <option value="elementary">Elementary (K–5)</option>
+            <option value="middle">Middle School (6–8)</option>
+            <option value="high">High School (9–12)</option>
+            <option value="college">College / Univ</option>
+          </select>
+          <input id="newProfPin" type="text" maxlength="4" class="themed-input px-3 py-2 font-mono" placeholder="4-digit PIN (e.g., 3333)" />
+        </div>
+        <input id="newProfInterests" type="text" class="themed-input w-full px-3 py-2" placeholder="Interests (e.g., Anime, Soccer, Space)" />
+        <button onclick="createNewProfile()" class="btn-primary w-full py-2.5 font-bold">Create Profile</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Class-Notes Grounding Drawer -->
+  <div id="classNotesModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div class="themed-card w-full max-w-xl p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-lg flex items-center gap-2"><i data-lucide="book-marked" class="w-5 h-5" style="color: var(--accent);"></i> Class-Notes Grounding</h3>
+        <button onclick="closeModal('classNotesModal')" class="btn-secondary p-1.5"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <p class="text-xs" style="color: var(--text-muted);">Paste teacher slides, syllabus notes, or study guides. When enabled, all AI responses strictly reference your classroom material.</p>
+      <label class="flex items-center justify-between p-3 rounded-xl themed-subcard cursor-pointer">
+        <span class="text-sm font-bold">Enable Strict Class-Notes Grounding</span>
+        <input id="classNotesToggle" type="checkbox" onchange="saveClassNotes()" class="w-4 h-4 accent-emerald-500" />
+      </label>
+      <textarea id="classNotesTextarea" rows="7" oninput="saveClassNotes()" class="themed-input w-full p-3 text-xs" placeholder="Paste your teacher's notes or study guide here..."></textarea>
+      <div class="flex justify-end gap-2">
+        <button onclick="clearClassNotes()" class="btn-secondary px-3 py-1.5 text-xs font-semibold text-rose-500">Clear</button>
+        <button onclick="closeModal('classNotesModal')" class="btn-primary px-4 py-1.5 text-xs font-bold">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Kid Rewards Store -->
+  <div id="kidRewardsModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div class="themed-card w-full max-w-md p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="font-bold text-lg">🎁 Family Rewards Store</h3>
+          <p id="kidRewardsBalance" class="text-xs font-bold" style="color: var(--accent-text);">Your Balance: 0 XP</p>
+        </div>
+        <button onclick="closeModal('kidRewardsModal')" class="btn-secondary p-1.5"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div id="kidRewardsList" class="space-y-2.5 max-h-72 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <!-- Modal: STEM Lab -->
+  <div id="stemModal" class="fixed inset-0 z-50 hidden items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm">
+    <div class="themed-card w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div class="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-b" style="border-color: var(--border-color);">
+        <h3 class="font-extrabold text-base flex items-center gap-2"><i data-lucide="atom" class="w-5 h-5" style="color: var(--accent);"></i> STEM Lab</h3>
+        <div class="flex items-center gap-2">
+          <div class="flex p-0.5 rounded-xl border text-xs" style="background-color: var(--bg-surface-2); border-color: var(--border-color);">
+            <button onclick="setStemTab('periodic')" id="stemTabPeriodic" class="px-2.5 py-1 rounded-lg font-bold">Periodic Table</button>
+            <button onclick="setStemTab('molar')" id="stemTabMolar" class="px-2.5 py-1 rounded-lg font-bold">Molar Mass</button>
+            <button onclick="setStemTab('formulas')" id="stemTabFormulas" class="px-2.5 py-1 rounded-lg font-bold">Formulas</button>
+            <button onclick="setStemTab('units')" id="stemTabUnits" class="px-2.5 py-1 rounded-lg font-bold">Units</button>
+          </div>
+          <button onclick="closeModal('stemModal')" class="btn-secondary p-1.5"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+      </div>
+      <div class="p-4 overflow-y-auto flex-1 space-y-4">
+        <div id="stemPanelPeriodic" class="space-y-3">
+          <div id="ptableDetailBanner" class="themed-subcard px-4 py-2 text-xs flex flex-wrap gap-3">Click any element to inspect atomic mass & electron shells.</div>
+          <div class="overflow-x-auto"><div id="ptableGrid" class="ptable-grid min-w-[800px]"></div></div>
+        </div>
+        <div id="stemPanelMolar" class="hidden max-w-lg mx-auto themed-subcard p-5 space-y-3">
+          <div class="flex gap-2">
+            <input id="molarFormulaInput" type="text" value="C6H12O6" class="themed-input flex-1 px-3 py-2 font-mono font-bold text-sm" />
+            <button onclick="calculateMolarMass()" class="btn-primary px-4 py-2 text-sm font-bold">Calculate</button>
+          </div>
+          <div id="molarResultBox" class="space-y-2"></div>
+        </div>
+        <div id="stemPanelFormulas" class="hidden grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+        <div id="stemPanelUnits" class="hidden max-w-md mx-auto themed-subcard p-5 space-y-3">
+          <select id="unitCategory" onchange="populateUnitSelectors()" class="themed-input w-full px-3 py-2 text-sm">
+            <option value="length">Length</option><option value="mass">Mass</option><option value="temperature">Temperature</option><option value="energy">Energy</option>
+          </select>
+          <div class="grid grid-cols-2 gap-2">
+            <input id="unitInputVal" type="number" value="1" oninput="convertUnits()" class="themed-input px-3 py-2 font-mono text-sm" />
+            <input id="unitOutputVal" type="text" readonly class="themed-input px-3 py-2 font-mono text-sm" />
+            <select id="unitFrom" onchange="convertUnits()" class="themed-input px-3 py-2 text-sm"></select>
+            <select id="unitTo" onchange="convertUnits()" class="themed-input px-3 py-2 text-sm"></select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Spaced-Repetition Flashcard Player -->
+  <div id="flashcardModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div class="themed-card w-full max-w-lg p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 id="fcDeckTitle" class="font-bold text-base">Deck</h3>
+          <p id="fcProgressText" class="text-xs" style="color: var(--text-muted);">Card 1 of 5</p>
+        </div>
+        <button onclick="closeModal('flashcardModal')" class="btn-secondary p-1.5"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div id="fcLoadingState" class="hidden py-12 text-center"><i data-lucide="loader-2" class="w-7 h-7 animate-spin mx-auto" style="color: var(--accent);"></i></div>
+      <div id="fcStage" class="hidden space-y-4">
+        <div class="perspective-1000 w-full h-56 cursor-pointer" onclick="flipFlashcard()">
+          <div id="fcCardInner" class="flashcard-inner">
+            <div class="flashcard-face themed-subcard p-6 flex flex-col justify-center items-center border-2" style="border-color: var(--accent);">
+              <div id="fcFrontText" class="text-center font-bold text-base"></div>
+            </div>
+            <div class="flashcard-face flashcard-back themed-subcard p-6 flex flex-col justify-center items-center border-2" style="border-color: #10B981;">
+              <div id="fcBackText" class="text-center font-medium text-sm"></div>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="rateFlashcard('again')" class="py-2 rounded-xl text-xs font-bold danger-box">🔁 Again</button>
+          <button onclick="rateFlashcard('good')" class="py-2 rounded-xl text-xs font-bold warn-box">👍 Good</button>
+          <button onclick="rateFlashcard('easy')" class="py-2 rounded-xl text-xs font-bold success-box">🚀 Easy (+10 XP)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- =========================================================================
+       APPLICATION JAVASCRIPT
+       ========================================================================= -->
+  <script>
+    /* =========================================================================
+       1. CONFIGURATION, FAMILY STORE & STATE
+       ========================================================================= */
+    const apiKey = ""; // Provided automatically at runtime
+    const GEMINI_MODEL = "gemini-3-flash-preview";
+    const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+    const FAMILY_STORE_KEY = "omnischolar_family_edition_v1";
+
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    }
+
+    const GRADE_PROFILES = {
+      elementary: { label: "Elementary (K–5)", short: "K–5", persona: "You are a warm, encouraging Elementary (K-5) tutor. Use simple words and fun everyday analogies." },
+      middle: { label: "Middle School (6–8)", short: "6–8", persona: "You are a clear, structured Middle School (6-8) tutor." },
+      high: { label: "High School (9–12)", short: "9–12", persona: "You are an elite High School AP/IB tutor with textbook precision and exam-trap warnings." },
+      college: { label: "College / University", short: "College", persona: "You are a University Professor providing rigorous formal proofs and scholarly depth." }
+    };
+
+    const MATH_SYMBOLS = [
+      { label: "a/b", latex: "\\frac{a}{b}" }, { label: "√x", latex: "\\sqrt{x}" },
+      { label: "x²", latex: "x^{2}" }, { label: "∫", latex: "\\int_{a}^{b} " },
+      { label: "∑", latex: "\\sum_{i=1}^{n} " }, { label: "lim", latex: "\\lim_{x \\to \\infty} " },
+      { label: "d/dx", latex: "\\frac{d}{dx}" }, { label: "π", latex: "\\pi" }
+    ];
+
+    let familyStore = null;
+    const state = {
+      activeProfileId: null,
+      pendingPinProfileId: null,
+      activeTab: "homework",
+      learningMode: "solver",
+      hwSubMode: "solve",
+      mathInputMode: "type",
+      essayMode: "proofread",
+      vaultSubTab: "items",
+      explainMyWay: true,
+      hwBatch: [],
+      mathPhoto: null,
+      lastResults: { hw: null, math: null, essay: null },
+      pomodoro: { mode: "focus", secondsLeft: 25 * 60, running: false, timerId: null },
+      feynman: { topic: "", history: [], score: 0, bonusAwarded: false },
+      podcast: { lines: [], playing: false, currentIdx: 0, speed: 1 },
+      battle: { active: false, p1: null, p2: null, s1: 0, s2: 0, turn: 1, qIdx: 0, questions: [], secondsLeft: 60, timerId: null },
+      exam: { questions: [], subject: "Algebra", title: "", secondsLeft: 0, timerId: null },
+      activeDeckId: null, activeCardIdx: 0, cardFlipped: false,
+      voice: { recognition: null }
+    };
+
+    function createDefaultFamilyStore() {
+      return {
+        profiles: [
+          {
+            id: "prof-maya", name: "Maya", avatar: "🎧", role: "student", gradeLabel: "Grade 4",
+            gradeLevel: "elementary", pin: "1111", interests: ["Music", "Cooking"],
+            xp: 340, streak: 5, lockSocratic: true,
+            classNotes: { active: false, text: "" },
+            vault: [
+              { id: "m-v1", title: "Adding Fractions with Pizza Slices", subject: "Math", date: "Today", summary: "3/8 + 2/8 = 5/8 of a pizza.", fullContent: "When denominators match, add the numerators: $\\frac{3}{8} + \\frac{2}{8} = \\frac{5}{8}$." }
+            ],
+            decks: [
+              { id: "m-d1", title: "Fraction Basics", subject: "Math", cards: [
+                { front: "What is the top number of a fraction called?", back: "The **Numerator**!", status: "mastered" },
+                { front: "What is $\\frac{1}{2} + \\frac{1}{2}$?", back: "$1$ whole!", status: "new" }
+              ]}
+            ],
+            mastery: { "Fractions": { subject: "Math", solved: 9, accuracy: 86 }, "Biology": { subject: "Science", solved: 4, accuracy: 62 }, "Writing": { subject: "English", solved: 5, accuracy: 78 } },
+            assignments: [
+              { id: "a-m1", title: "Fraction Word Problems Worksheet", subject: "Math", due: "Tomorrow", source: "Google Classroom", status: "Pending", targetTab: "homework", prompt: "Maya baked 12 cupcakes. She frosted 5/12 with chocolate and 4/12 with vanilla. What fraction is left unfrosted?" },
+              { id: "a-m2", title: "Plant Life Cycle Paragraph", subject: "Science", due: "Friday", source: "Google Classroom", status: "Pending", targetTab: "essay", prompt: "Write a short paragraph explaining how a seed grows into a flowering plant." }
+            ],
+            transcripts: [
+              { date: "Today 8:15 AM", workspace: "Homework", prompt: "Help me add 3/8 + 2/8", response: "Imagine a song with 8 beats in a measure! If you play 3 beats and then 2 more beats, how many of the 8 beats did you play?" }
+            ]
+          },
+          {
+            id: "prof-marcus", name: "Marcus", avatar: "🏀", role: "student", gradeLabel: "Grade 10",
+            gradeLevel: "high", pin: "2222", interests: ["Video Games", "Basketball"],
+            xp: 520, streak: 7, lockSocratic: false,
+            classNotes: { active: false, text: "" },
+            vault: [
+              { id: "k-v1", title: "Quadratic Formula & Discriminant", subject: "Math", date: "Today", summary: "Solving $2x^2 - 5x - 3 = 0$", fullContent: "$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$" }
+            ],
+            decks: [
+              { id: "k-d1", title: "AP Chemistry & Algebra", subject: "Science", cards: [
+                { front: "What is the Ideal Gas Law?", back: "$$PV = nRT$$", status: "mastered" },
+                { front: "What is the derivative of $x^3$?", back: "$$3x^2$$", status: "new" }
+              ]}
+            ],
+            mastery: { "Algebra": { subject: "Math", solved: 15, accuracy: 88 }, "Chemistry": { subject: "Science", solved: 6, accuracy: 56 }, "US History": { subject: "History", solved: 8, accuracy: 81 }, "Writing": { subject: "English", solved: 7, accuracy: 79 } },
+            assignments: [
+              { id: "a-k1", title: "Stoichiometry Lab Problems", subject: "Science", due: "Tomorrow", source: "Canvas", status: "Pending", targetTab: "homework", prompt: "Balance C3H8 + O2 -> CO2 + H2O and calculate grams of CO2 from 22g of propane." },
+              { id: "a-k2", title: "Industrial Revolution Rubric Essay", subject: "History", due: "Thursday", source: "Canvas", status: "Pending", targetTab: "essay", prompt: "Evaluate how railroads and factory labor transformed 19th-century American cities." }
+            ],
+            transcripts: [
+              { date: "Yesterday 6:40 PM", workspace: "Math Studio", prompt: "Solve 2x^2 - 5x - 3 = 0", response: "Using the quadratic formula, x = 3 and x = -1/2." }
+            ]
+          },
+          {
+            id: "prof-parent", name: "Parent Admin", avatar: "🛡️", role: "parent", gradeLabel: "Family Admin",
+            gradeLevel: "college", pin: "1234", interests: ["Leadership", "Finance"],
+            xp: 0, streak: 0, lockSocratic: false,
+            classNotes: { active: false, text: "" },
+            vault: [], decks: [], mastery: {}, assignments: [], transcripts: []
+          }
+        ],
+        rewards: [
+          { id: "rew-1", title: "30 min Extra Game Time", cost: 200 },
+          { id: "rew-2", title: "Pick Family Dinner Menu", cost: 500 },
+          { id: "rew-3", title: "Stay Up 30 Mins Late (Weekend)", cost: 350 }
+        ],
+        rewardRequests: [
+          { id: "req-1", profileId: "prof-maya", childName: "Maya", rewardTitle: "30 min Extra Game Time", cost: 200, status: "Pending" }
+        ]
+      };
+    }
+
+    function loadFamilyStore() {
+      try {
+        const raw = localStorage.getItem(FAMILY_STORE_KEY);
+        familyStore = raw ? JSON.parse(raw) : createDefaultFamilyStore();
+        if (!familyStore.updatedAt) familyStore.updatedAt = Date.now();
+      } catch (e) {
+        familyStore = createDefaultFamilyStore();
+        familyStore.updatedAt = Date.now();
+      }
+      try { localStorage.setItem(FAMILY_STORE_KEY, JSON.stringify(familyStore)); } catch (e) {}
+    }
+
+    let cloudSyncDebounceTimer = null;
+
+    function saveFamilyStore(skipCloud = false) {
+      if (!familyStore) return;
+      if (!skipCloud) {
+        familyStore.updatedAt = Date.now();
+      }
+      try { localStorage.setItem(FAMILY_STORE_KEY, JSON.stringify(familyStore)); } catch (e) {}
+
+      if (!skipCloud && typeof window.syncFamilyToCloud === "function") {
+        clearTimeout(cloudSyncDebounceTimer);
+        cloudSyncDebounceTimer = setTimeout(() => {
+          window.syncFamilyToCloud(familyStore);
+        }, 450);
+      }
+    }
+
+    // Real-time cloud state receiver with loop-prevention via updatedAt comparison
+    window.applyCloudState = function (cloudData) {
+      if (!cloudData || !Array.isArray(cloudData.profiles)) return;
+      const localTs = familyStore?.updatedAt || 0;
+      const cloudTs = cloudData.updatedAt || 0;
+      if (cloudTs <= localTs) return;
+
+      familyStore = {
+        ...createDefaultFamilyStore(),
+        ...cloudData,
+        updatedAt: cloudTs
+      };
+      saveFamilyStore(true);
+
+      // Refresh visible UI without interrupting active typing
+      renderProfileSwitcher();
+      if (state.activeProfileId) {
+        updateTopProfileUI();
+        updateClassNotesUI();
+        if (state.activeTab === "parent") renderParentDashboard();
+        if (state.activeTab === "vault") { renderVault(); renderSpacedRepetitionDecks(); renderMasteryHeatmap(); }
+        if (state.activeTab === "planner") renderPlanner();
+        if (state.activeTab === "battles") renderBattleSetupAndLeaderboard();
+      }
+      updateCloudSyncBadge("cloud", "Live Firestore Sync Active");
+    };
+
+    window.updateCloudSyncBadge = function (mode, detail = "") {
+      const badge = document.getElementById("cloudSyncStatusBadge");
+      const textEl = document.getElementById("cloudSyncBadgeText");
+      const pStatus = document.getElementById("parentSyncStatusText");
+      const pDetail = document.getElementById("parentSyncDetailText");
+      const pTime = document.getElementById("parentLastSyncTime");
+
+      const isCloud = mode === "cloud";
+      if (badge && textEl) {
+        badge.classList.remove("success-box", "warn-box");
+        badge.classList.add(isCloud ? "success-box" : "warn-box");
+        textEl.textContent = isCloud ? "☁️ Cloud Synced" : "💾 Local Mode";
+        badge.title = detail || (isCloud ? "Connected to Firebase Firestore" : "Running in local browser storage");
+      }
+      if (pStatus) pStatus.textContent = isCloud ? "☁️ Cloud Synced" : "💾 Local Mode";
+      if (pDetail && detail) pDetail.textContent = detail;
+      if (pTime && window.__cloudSyncState?.lastSyncedAt) {
+        pTime.textContent = new Date(window.__cloudSyncState.lastSyncedAt).toLocaleTimeString();
+      }
+    };
+
+    function handleSyncBadgeClick() {
+      const p = getActiveProfile();
+      if (p?.role === "parent") {
+        switchTab("parent");
+        document.getElementById("parentCloudSetupPanel")?.scrollIntoView({ behavior: "smooth" });
+      } else {
+        const isCloud = window.__cloudSyncState?.mode === "cloud";
+        showToast(isCloud ? "☁️ Your progress is synced to the Family Cloud!" : "💾 Saved locally on this device. Sign in as Parent Admin for Cloud Setup.", "info");
+      }
+    }
+
+    async function forceSyncFamilyNow() {
+      if (window.__cloudSyncState?.mode !== "cloud") {
+        showToast("Local Mode active: add your Firebase config in index.html to enable cloud sync.", "info");
+        return;
+      }
+      familyStore.updatedAt = Date.now();
+      const ok = await window.syncFamilyToCloud(familyStore);
+      if (ok) {
+        updateCloudSyncBadge("cloud", "Manual sync completed");
+        showToast("☁️ Family data synced to Firestore!", "success");
+      } else {
+        showToast("Sync failed — check Firestore rules or network.", "error");
+      }
+    }
+
+    async function testVercelApiConnection() {
+      const btn = document.getElementById("testApiBtn");
+      const resEl = document.getElementById("parentApiTestResult");
+      if (btn) btn.disabled = true;
+      if (resEl) resEl.textContent = "Pinging POST /api/gemini...";
+      try {
+        const res = await fetch("/api/gemini", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: "Reply with exactly: OK",
+            systemInstruction: "Return OK",
+            images: [],
+            model: "gemini-2.5-flash"
+          })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data?.text) {
+          if (resEl) resEl.textContent = "✅ Connected! Vercel /api/gemini responded cleanly.";
+          document.getElementById("parentAiRouteText").textContent = "🚀 Vercel /api/gemini (Production)";
+          showToast("Vercel /api/gemini is live!", "success");
+        } else {
+          throw new Error("Unexpected response payload");
+        }
+      } catch (err) {
+        if (resEl) resEl.textContent = "⚠️ /api/gemini unavailable here — using Preview Sandbox fallback.";
+        document.getElementById("parentAiRouteText").textContent = "🧪 Preview Sandbox Fallback";
+        showToast("Running in Preview Sandbox fallback mode.", "info");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function copyDeploymentSnippet(type) {
+      const snippets = {
+        gemini: `import { GoogleGenAI } from '@google/genai';
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+  try {
+    const { prompt, systemInstruction, images = [], responseSchema = null, model = 'gemini-2.5-flash' } = req.body;
+    const parts = [{ text: prompt || '' }];
+    for (const img of images) {
+      if (img?.base64) {
+        parts.push({ inlineData: { mimeType: img.mimeType || 'image/png', data: img.base64 } });
+      }
+    }
+    const config = {};
+    if (systemInstruction) config.systemInstruction = systemInstruction;
+    if (responseSchema) {
+      config.responseMimeType = 'application/json';
+      config.responseSchema = responseSchema;
+    }
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: 'user', parts }],
+      config
+    });
+    return res.status(200).json({ text: response.text });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'AI request failed' });
+  }
+}`,
+        package: `{
+  "name": "omnischolar-ai-pro",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "^3.6.1"
+  }
+}`
+      };
+
+      const textToCopy = snippets[type];
+      if (!textToCopy) return;
+      const ta = document.createElement("textarea");
+      ta.value = textToCopy;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        showToast(`Copied ${type === "gemini" ? "api/gemini.js" : "package.json"} to clipboard!`, "success");
+      } catch (e) {
+        showToast("Copy failed — please copy manually.", "error");
+      }
+      document.body.removeChild(ta);
+    }
+
+    function getActiveProfile() {
+      return familyStore.profiles.find(p => p.id === state.activeProfileId) || familyStore.profiles[0];
+    }
+
+    function awardXP(amount, reason = "") {
+      const p = getActiveProfile();
+      if (!p || p.role === "parent") return;
+      p.xp = (p.xp || 0) + amount;
+      saveFamilyStore();
+      updateTopProfileUI();
+      showToast(`+${amount} XP ${reason ? "• " + reason : ""}`, "success");
+    }
+
+    function logTranscript(workspace, prompt, response) {
+      const p = getActiveProfile();
+      if (!p) return;
+      p.transcripts = p.transcripts || [];
+      p.transcripts.unshift({
+        date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        workspace,
+        prompt: String(prompt).slice(0, 140),
+        response: String(response).slice(0, 220)
+      });
+      if (p.transcripts.length > 30) p.transcripts.pop();
+      saveFamilyStore();
+    }
+
+    /* =========================================================================
+       2. INITIALIZATION & PROFILE SWITCHER
+       ========================================================================= */
+    window.addEventListener("DOMContentLoaded", () => {
+      loadFamilyStore();
+      initMathSymbolPad();
+      initScratchpad();
+      initGraphCalculator();
+      buildPeriodicTable();
+      buildFormulaSheet();
+      populateUnitSelectors();
+      calculateMolarMass();
+      updatePomodoroUI();
+      setupClipboardImagePaste();
+      renderProfileSwitcher();
+      updateCloudSyncBadge(window.__cloudSyncState?.mode || "local");
+      lucide.createIcons();
+    });
+
+    function openProfileSwitcher() {
+      renderProfileSwitcher();
+      document.getElementById("pinEntryPanel").classList.add("hidden");
+      document.getElementById("profileSwitcherOverlay").classList.remove("hidden");
+      lucide.createIcons();
+    }
+
+    function renderProfileSwitcher() {
+      const grid = document.getElementById("profileCardsGrid");
+      grid.innerHTML = familyStore.profiles.map(p => `
+        <button onclick="selectProfileForPin('${p.id}')" class="group p-5 rounded-2xl bg-slate-900/80 border border-slate-700/80 hover:border-blue-500 hover:-translate-y-1 transition-all text-center space-y-2 shadow-xl">
+          <div class="w-16 h-16 mx-auto rounded-2xl bg-slate-800 flex items-center justify-center text-3xl group-hover:scale-110 transition-transform">${p.avatar}</div>
+          <div class="font-extrabold text-base text-white">${escapeHtml(p.name)}</div>
+          <div class="text-[11px] font-semibold text-blue-300">${escapeHtml(p.gradeLabel)}</div>
+          ${p.role === "student" ? `<div class="text-[10px] text-slate-400">🔥 ${p.streak}d • ⭐ ${p.xp} XP</div>` : `<div class="text-[10px] text-amber-400 font-bold">Command Center</div>`}
+          <div class="text-[10px] font-mono text-slate-500 pt-1">Demo PIN: ${p.pin}</div>
+        </button>
+      `).join("") + `
+        <button onclick="openAddProfileModal()" class="p-5 rounded-2xl border-2 border-dashed border-slate-700 hover:border-blue-400 flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-white transition-all">
+          <div class="w-14 h-14 rounded-2xl bg-slate-800/60 flex items-center justify-center"><i data-lucide="plus" class="w-7 h-7"></i></div>
+          <span class="font-bold text-sm">Add Profile</span>
+        </button>
+      `;
+      lucide.createIcons();
+    }
+
+    function selectProfileForPin(profileId) {
+      const p = familyStore.profiles.find(x => x.id === profileId);
+      if (!p) return;
+      state.pendingPinProfileId = profileId;
+      document.getElementById("pinProfileAvatar").textContent = p.avatar;
+      document.getElementById("pinProfileName").textContent = p.name;
+      document.getElementById("pinProfileHint").textContent = `${p.gradeLabel} • PIN: ${p.pin}`;
+      const input = document.getElementById("switcherPinInput");
+      input.value = "";
+      document.getElementById("pinEntryPanel").classList.remove("hidden");
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function cancelPinEntry() {
+      state.pendingPinProfileId = null;
+      document.getElementById("pinEntryPanel").classList.add("hidden");
+    }
+
+    function verifyProfilePin() {
+      const p = familyStore.profiles.find(x => x.id === state.pendingPinProfileId);
+      const entered = document.getElementById("switcherPinInput").value.trim();
+      if (!p) return;
+      if (entered !== p.pin) {
+        showToast("Incorrect PIN. Check the demo PIN shown on the card!", "error");
+        return;
+      }
+      signInProfile(p.id);
+    }
+
+    function signInProfile(profileId) {
+      state.activeProfileId = profileId;
+      const p = getActiveProfile();
+      document.getElementById("profileSwitcherOverlay").classList.add("hidden");
+
+      // Apply Profile's Locked Grade Theme
+      document.documentElement.setAttribute("data-theme", p.gradeLevel);
+      document.getElementById("gradeBadgeHeader").textContent = GRADE_PROFILES[p.gradeLevel].label;
+
+      // Apply Per-Child Guardrail (Lock Socratic)
+      if (p.lockSocratic) {
+        state.learningMode = "socratic";
+        document.getElementById("modeSolverBtn").style.opacity = "0.4";
+      } else {
+        document.getElementById("modeSolverBtn").style.opacity = "1";
+      }
+      setLearningMode(state.learningMode, true);
+
+      // Show Parent Command Tab if Parent Admin
+      const parentBtn = document.getElementById("parentNavBtn");
+      const kidRewardsBtn = document.getElementById("kidRewardsBtn");
+      if (p.role === "parent") {
+        parentBtn.classList.remove("hidden"); parentBtn.classList.add("flex");
+        kidRewardsBtn.classList.add("hidden");
+      } else {
+        parentBtn.classList.add("hidden"); parentBtn.classList.remove("flex");
+        kidRewardsBtn.classList.remove("hidden");
+      }
+
+      updateTopProfileUI();
+      updateExplainMyWayUI();
+      updateClassNotesUI();
+      setHwSubMode("solve");
+      setMathInputMode("type");
+      setEssayMode("proofread");
+      setVaultSubTab("items");
+
+      switchTab(p.role === "parent" ? "parent" : "homework");
+      showToast(`Welcome back, ${p.name}!`, "success");
+    }
+
+    function updateTopProfileUI() {
+      const p = getActiveProfile();
+      if (!p) return;
+      document.getElementById("topProfileAvatar").textContent = p.avatar;
+      document.getElementById("topProfileName").textContent = p.name;
+      document.getElementById("topProfileXP").textContent = `${p.xp || 0} XP`;
+      document.getElementById("activeProfileMeta").textContent = p.role === "parent"
+        ? "Family Admin • Full Oversight"
+        : `${p.gradeLabel} • Interests: ${(p.interests || []).join(", ") || "General"} • 🔥 ${p.streak}d Streak`;
+    }
+
+    function openAddProfileModal() {
+      document.getElementById("addProfileModal").classList.remove("hidden");
+      document.getElementById("addProfileModal").classList.add("flex");
+    }
+
+    function createNewProfile() {
+      const name = document.getElementById("newProfName").value.trim();
+      const avatar = document.getElementById("newProfAvatar").value.trim() || "🚀";
+      const gradeLevel = document.getElementById("newProfGrade").value;
+      const pin = document.getElementById("newProfPin").value.trim();
+      const interests = document.getElementById("newProfInterests").value.split(",").map(s => s.trim()).filter(Boolean);
+
+      if (!name || !/^\d{4}$/.test(pin)) {
+        showToast("Enter a name and a 4-digit numeric PIN.", "error");
+        return;
+      }
+      familyStore.profiles.push({
+        id: "prof-" + Date.now(), name, avatar, role: "student",
+        gradeLabel: GRADE_PROFILES[gradeLevel].label, gradeLevel, pin,
+        interests: interests.length ? interests : ["Space", "Games"],
+        xp: 100, streak: 1, lockSocratic: gradeLevel === "elementary",
+        classNotes: { active: false, text: "" },
+        vault: [], decks: [],
+        mastery: { "Algebra": { subject: "Math", solved: 1, accuracy: 75 }, "Science": { subject: "Science", solved: 1, accuracy: 75 } },
+        assignments: [], transcripts: []
+      });
+      saveFamilyStore();
+      closeModal("addProfileModal");
+      renderProfileSwitcher();
+      if (state.activeTab === "parent") renderParentDashboard();
+      showToast(`Created profile for ${name}!`, "success");
+    }
+
+    /* =========================================================================
+       4. SMART DUAL-MODE AI ROUTER (VERCEL /api/gemini -> PREVIEW FALLBACK)
+       ========================================================================= */
+    async function callOmniAI({ parts = [], prompt = "", systemInstruction = "", images = [], responseSchema = null, model = "gemini-2.5-flash" }) {
+      // Normalize parts into { promptText, imageList } for /api/gemini
+      let promptText = prompt;
+      const imageList = [...images];
+      for (const part of parts) {
+        if (part.text) promptText += (promptText ? "\n" : "") + part.text;
+        if (part.inlineData) {
+          imageList.push({ mimeType: part.inlineData.mimeType, base64: part.inlineData.data });
+        }
+      }
+
+      // 1. Attempt Vercel Serverless Route (/api/gemini) first
+      try {
+        const vercelRes = await fetch("/api/gemini", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: promptText,
+            systemInstruction,
+            images: imageList,
+            responseSchema,
+            model
+          })
+        });
+
+        if (vercelRes.ok) {
+          const ct = vercelRes.headers.get("content-type") || "";
+          if (ct.includes("application/json")) {
+            const vData = await vercelRes.json();
+            if (typeof vData.text === "string") {
+              const routeEl = document.getElementById("parentAiRouteText");
+              if (routeEl) routeEl.textContent = "🚀 Vercel /api/gemini (Production)";
+              return responseSchema ? JSON.parse(vData.text) : vData.text;
+            }
+          }
+        }
+      } catch (e) {
+        // Gracefully fall through to built-in Preview Sandbox runtime
+      }
+
+      // 2. Fallback: Built-in Gemini Preview Runtime with exponential backoff
+      const fallbackParts = parts.length ? parts : [
+        ...imageList.map(img => ({ inlineData: { mimeType: img.mimeType || "image/png", data: img.base64 } })),
+        { text: promptText }
+      ];
+      const payload = {
+        contents: [{ role: "user", parts: fallbackParts }],
+        systemInstruction: { parts: [{ text: systemInstruction }] }
+      };
+      if (responseSchema) payload.generationConfig = { responseMimeType: "application/json", responseSchema };
+
+      const delays = [1000, 2000, 4000];
+      let lastErr = null;
+      for (let i = 0; i <= delays.length; i++) {
+        try {
+          const res = await fetch(GEMINI_ENDPOINT, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const txt = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!txt) throw new Error("Empty AI response");
+          const routeEl = document.getElementById("parentAiRouteText");
+          if (routeEl) routeEl.textContent = "🧪 Preview Sandbox Fallback";
+          return responseSchema ? JSON.parse(txt) : txt;
+        } catch (err) {
+          lastErr = err;
+          if (i < delays.length) await new Promise(r => setTimeout(r, delays[i]));
+        }
+      }
+      throw lastErr || new Error("Gemini API unavailable");
+    }
+
+    // Backwards-compatible wrapper used across all workspaces
+    async function callGemini({ parts, systemInstruction, responseSchema = null }) {
+      return callOmniAI({ parts, systemInstruction, responseSchema });
+    }
+
+    function switchTab(tab) {
+      state.activeTab = tab;
+      document.querySelectorAll(".tab-panel").forEach(panel => {
+        panel.classList.toggle("hidden", panel.id !== `tab-${tab}`);
+      });
+      document.querySelectorAll("[data-tab-btn]").forEach(btn => {
+        const active = btn.getAttribute("data-tab-btn") === tab;
+        btn.style.backgroundColor = active ? "var(--accent)" : "transparent";
+        btn.style.color = active ? "#FFFFFF" : "var(--text-secondary)";
+      });
+
+      if (tab === "math") {
+        setTimeout(() => {
+          resizeGraphCanvas();
+          if (state.mathInputMode === "draw") resizeScratchpad();
+        }, 30);
+      } else if (tab === "podcasts") {
+        populatePodcastVaultDropdown();
+      } else if (tab === "battles") {
+        renderBattleSetupAndLeaderboard();
+      } else if (tab === "planner") {
+        renderPlanner();
+      } else if (tab === "vault") {
+        renderVault();
+        renderSpacedRepetitionDecks();
+        renderMasteryHeatmap();
+      } else if (tab === "parent") {
+        renderParentDashboard();
+      }
+      lucide.createIcons();
+    }
+
+    function setLearningMode(mode, silent = false) {
+      const p = getActiveProfile();
+      if (mode === "solver" && p?.lockSocratic) {
+        showToast("Parent Guardrail Active: Socratic Tutor Mode is locked for this profile.", "error");
+        return;
+      }
+      state.learningMode = mode;
+      document.querySelectorAll("[data-mode-btn]").forEach(btn => {
+        const active = btn.getAttribute("data-mode-btn") === mode;
+        btn.style.backgroundColor = active ? "var(--accent)" : "transparent";
+        btn.style.color = active ? "#FFFFFF" : "var(--text-secondary)";
+      });
+      updateSolveButtonLabels();
+      if (!silent) showToast(mode === "socratic" ? "Socratic Tutor Mode active" : "Step-by-Step Solver active", "info");
+    }
+
+    function toggleExplainMyWay() {
+      state.explainMyWay = !state.explainMyWay;
+      updateExplainMyWayUI();
+    }
+
+    function updateExplainMyWayUI() {
+      const p = getActiveProfile();
+      const tags = (p?.interests || []).join(" & ") || "Your Interests";
+      ["hw", "math"].forEach(prefix => {
+        const chip = document.getElementById(`${prefix}InterestChip`);
+        const lbl = document.getElementById(`${prefix}InterestLabel`);
+        if (!chip || !lbl) return;
+        lbl.textContent = state.explainMyWay ? `ON (${tags})` : "OFF";
+        chip.style.backgroundColor = state.explainMyWay ? "var(--accent-soft)" : "var(--bg-surface-2)";
+        chip.style.borderColor = state.explainMyWay ? "var(--accent)" : "var(--border-strong)";
+        chip.style.color = state.explainMyWay ? "var(--accent-text)" : "var(--text-muted)";
+      });
+    }
+
+    function openClassNotesModal() {
+      const p = getActiveProfile();
+      document.getElementById("classNotesToggle").checked = Boolean(p.classNotes?.active);
+      document.getElementById("classNotesTextarea").value = p.classNotes?.text || "";
+      document.getElementById("classNotesModal").classList.remove("hidden");
+      document.getElementById("classNotesModal").classList.add("flex");
+    }
+
+    function saveClassNotes() {
+      const p = getActiveProfile();
+      p.classNotes = {
+        active: document.getElementById("classNotesToggle").checked,
+        text: document.getElementById("classNotesTextarea").value.trim()
+      };
+      saveFamilyStore();
+      updateClassNotesUI();
+    }
+
+    function clearClassNotes() {
+      document.getElementById("classNotesTextarea").value = "";
+      document.getElementById("classNotesToggle").checked = false;
+      saveClassNotes();
+    }
+
+    function updateClassNotesUI() {
+      const p = getActiveProfile();
+      const active = Boolean(p?.classNotes?.active && p?.classNotes?.text);
+      document.getElementById("groundingBanner").classList.toggle("hidden", !active);
+      document.getElementById("classNotesActiveDot").classList.toggle("hidden", !active);
+    }
+
+    function buildSystemPrompt(baseExtra = "") {
+      const p = getActiveProfile();
+      const gradePersona = GRADE_PROFILES[p.gradeLevel].persona;
+      const interestBlock = state.explainMyWay && p.interests?.length
+        ? ` EXPLAIN IT MY WAY: Use creative analogies and examples from the student's favorite interests: ${p.interests.join(", ")}.`
+        : "";
+      const notesBlock = p.classNotes?.active && p.classNotes?.text
+        ? ` STRICT CLASS-NOTES GROUNDING: Base your explanation strictly on these classroom notes:\n"""${p.classNotes.text.slice(0, 2500)}"""`
+        : "";
+      return `${gradePersona}${interestBlock}${notesBlock} ${baseExtra}`;
+    }
+
+    /* =========================================================================
+       5. QUICK-TRY PRESETS
+       ========================================================================= */
+    function loadPreset(type) {
+      if (type === "fractions") {
+        switchTab("homework"); setHwSubMode("solve");
+        document.getElementById("hwSubject").value = "Math";
+        document.getElementById("hwTextInput").value = "A recipe calls for 3/8 cup of flour and 2/8 cup of cocoa powder. How much dry mix is that in total?";
+      } else if (type === "mistake") {
+        switchTab("homework"); setHwSubMode("mistake");
+        document.getElementById("hwTextInput").value = "Solve 3(x - 4) + 2 = 20\nStep 1: 3x - 4 + 2 = 20\nStep 2: 3x - 2 = 20\nStep 3: x = 22/3";
+      } else if (type === "calculus") {
+        switchTab("math"); setMathInputMode("type");
+        document.getElementById("mathInput").value = "Evaluate \\int_{0}^{2} (3x^2 - 4x + 5) \\, dx";
+        updateMathPreview();
+      } else if (type === "essay") {
+        switchTab("essay"); setEssayMode("proofread");
+        document.getElementById("rubricTextInput").value = "Thesis (25), Evidence (25), Analysis (25), Grammar (25)";
+        document.getElementById("proofDraftInput").value = "The Industrial Revolution changed America fast. Railroads was built everywhere and factories made stuff quicker. Cities grew because people moved for jobs, even though working conditions were rough.";
+      } else if (type === "feynman") {
+        switchTab("feynman");
+        document.getElementById("feynmanTopicInput").value = "How Photosynthesis Works";
+      } else if (type === "podcast") {
+        switchTab("podcasts");
+        document.getElementById("podcastNotesInput").value = "Mitochondria are the powerhouse of the cell. Cellular respiration converts glucose and oxygen into ATP energy, carbon dioxide, and water across three stages: Glycolysis, Krebs Cycle, and Electron Transport Chain.";
+      }
+      showToast("Preset loaded!", "success");
+    }
+
+    /* =========================================================================
+       6. WORKSPACE 1: HOMEWORK SOLVER & MISTAKE FINDER
+       ========================================================================= */
+    function setHwSubMode(mode) {
+      state.hwSubMode = mode;
+      const sBtn = document.getElementById("hwSubSolveBtn"), mBtn = document.getElementById("hwSubMistakeBtn");
+      sBtn.style.backgroundColor = mode === "solve" ? "var(--accent)" : "transparent"; sBtn.style.color = mode === "solve" ? "#FFF" : "var(--text-secondary)";
+      mBtn.style.backgroundColor = mode === "mistake" ? "var(--accent)" : "transparent"; mBtn.style.color = mode === "mistake" ? "#FFF" : "var(--text-secondary)";
+      updateSolveButtonLabels();
+    }
+
+    function updateSolveButtonLabels() {
+      const lbl = document.getElementById("hwSolveBtnLabel");
+      if (state.hwSubMode === "mistake") lbl.textContent = "Inspect My Work & Find Mistake";
+      else lbl.textContent = state.learningMode === "socratic" ? "Start Socratic Tutoring" : "Analyze & Solve Step-by-Step";
+    }
+
+    async function handleBatchUpload(e) {
+      const files = Array.from(e.target.files || []);
+      for (const f of files) {
+        if (f.type === "application/pdf" && window.pdfjsLib) {
+          const pdf = await pdfjsLib.getDocument({ data: await f.arrayBuffer() }).promise;
+          for (let p = 1; p <= Math.min(pdf.numPages, 4); p++) {
+            const page = await pdf.getPage(p);
+            const vp = page.getViewport({ scale: 1.2 });
+            const c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
+            await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+            const d = c.toDataURL("image/jpeg", 0.8);
+            state.hwBatch.push({ id: "pdf-" + Date.now() + p, name: `${f.name} p.${p}`, dataUrl: d, base64: d.split(",")[1], mimeType: "image/jpeg", selected: p === 1 });
+          }
+        } else if (f.type.startsWith("image/")) {
+          await new Promise(res => {
+            const r = new FileReader();
+            r.onload = ev => { state.hwBatch.push({ id: "img-" + Date.now(), name: f.name, dataUrl: ev.target.result, base64: ev.target.result.split(",")[1], mimeType: f.type, selected: true }); res(); };
+            r.readAsDataURL(f);
+          });
+        }
+      }
+      renderHwBatchTray();
+    }
+
+    function renderHwBatchTray() {
+      const wrap = document.getElementById("hwBatchTrayWrap"), tray = document.getElementById("hwBatchTray");
+      if (!state.hwBatch.length) { wrap.classList.add("hidden"); return; }
+      wrap.classList.remove("hidden");
+      document.getElementById("hwBatchCount").textContent = `${state.hwBatch.filter(i => i.selected).length} selected`;
+      tray.innerHTML = state.hwBatch.map(i => `
+        <div onclick="toggleBatchItem('${i.id}')" class="rounded-lg overflow-hidden border-2 cursor-pointer" style="border-color: ${i.selected ? "var(--accent)" : "var(--border-color)"}; opacity: ${i.selected ? 1 : 0.5};">
+          <img src="${i.dataUrl}" class="w-full h-16 object-cover bg-white" />
+        </div>
+      `).join("");
+    }
+    function toggleBatchItem(id) { const x = state.hwBatch.find(i => i.id === id); if (x) x.selected = !x.selected; renderHwBatchTray(); }
+    function clearHwBatch() { state.hwBatch = []; renderHwBatchTray(); }
+
+    function setupClipboardImagePaste() {
+      window.addEventListener("paste", e => {
+        for (const item of e.clipboardData?.items || []) {
+          if (item.type.startsWith("image/")) {
+            const f = item.getAsFile();
+            if (f) handleBatchUpload({ target: { files: [f] } });
+          }
+        }
+      });
+    }
+
+    async function runHomeworkPipeline() {
+      const txt = document.getElementById("hwTextInput").value.trim();
+      const selected = state.hwBatch.filter(i => i.selected);
+      if (!txt && !selected.length) { showToast("Enter a question or upload a worksheet.", "error"); return; }
+
+      document.getElementById("hwEmptyState").classList.add("hidden");
+      document.getElementById("hwOutputContent").classList.add("hidden");
+      document.getElementById("hwLoadingState").classList.remove("hidden");
+
+      const parts = selected.map(p => ({ inlineData: { mimeType: p.mimeType, data: p.base64 } }));
+      const isMistake = state.hwSubMode === "mistake";
+      const isSocratic = state.learningMode === "socratic";
+
+      const schema = {
+        type: "OBJECT",
+        properties: {
+          title: { type: "STRING" }, detectedSubject: { type: "STRING" },
+          summaryOrProblem: { type: "STRING" },
+          steps: { type: "ARRAY", items: { type: "OBJECT", properties: { heading: { type: "STRING" }, detail: { type: "STRING" } }, required: ["heading", "detail"] } },
+          finalResult: { type: "STRING" }
+        },
+        required: ["title", "detectedSubject", "summaryOrProblem", "steps", "finalResult"]
+      };
+
+      parts.push({ text: `Subject: ${document.getElementById("hwSubject").value}\nMode: ${isMistake ? "Mistake Finder (inspect each line, pinpoint first error, give fix hint without spoiling answer)" : isSocratic ? "Socratic Tutor (guiding hints only, do not give final answer)" : "Step-by-Step Solver"}\nInput: ${txt || "Solve attached image(s)"}` });
+
+      try {
+        const res = await callGemini({
+          parts,
+          systemInstruction: buildSystemPrompt("Use LaTeX $...$ or $$...$$ for all math."),
+          responseSchema: schema
+        });
+        state.lastResults.hw = res;
+        window.__lastHwSpeech = `${res.title}. ${res.summaryOrProblem}. ${res.steps.map(s => s.heading + ": " + s.detail).join(" ")}. ${res.finalResult}`;
+        const out = document.getElementById("hwOutputContent");
+        out.innerHTML = `
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b" style="border-color: var(--border-color);">
+            <div><span class="text-xs font-bold px-2 py-0.5 rounded-full accent-badge">${escapeHtml(res.detectedSubject)}</span><h3 class="text-lg font-extrabold mt-1">${escapeHtml(res.title)}</h3></div>
+            <div class="flex gap-1.5">
+              <button onclick="speakText(window.__lastHwSpeech)" class="btn-secondary px-2.5 py-1 text-xs font-bold">🔊 Read Aloud</button>
+              <button onclick="saveCurrentToVault('hw')" class="btn-primary px-2.5 py-1 text-xs font-bold">Save to Vault</button>
+            </div>
+          </div>
+          <div class="themed-subcard p-3.5 text-sm font-medium rich-math">${formatRichText(res.summaryOrProblem)}</div>
+          <div class="space-y-2.5">${res.steps.map((s, i) => `
+            <div class="themed-subcard p-3.5 flex gap-3">
+              <span class="w-6 h-6 rounded-full text-xs font-bold text-white flex items-center justify-center shrink-0" style="background-color: var(--accent);">${i + 1}</span>
+              <div class="text-sm space-y-0.5"><div class="font-bold rich-math">${formatRichText(s.heading)}</div><div class="rich-math" style="color: var(--text-secondary);">${formatRichText(s.detail)}</div></div>
+            </div>
+          `).join("")}</div>
+          <div class="p-4 rounded-xl ${isSocratic || isMistake ? "warn-box" : "success-box"} text-sm font-bold rich-math">${formatRichText(res.finalResult)}</div>
+        `;
+        out.classList.remove("hidden");
+        renderMathInContainer(out);
+        logTranscript(isMistake ? "Mistake Finder" : "Homework", txt || "Worksheet Image", res.finalResult);
+        awardXP(25, "Homework Completed");
+      } catch (err) {
+        document.getElementById("hwOutputContent").innerHTML = `<div class="p-4 rounded-xl danger-box text-sm">${escapeHtml(err.message)}</div>`;
+        document.getElementById("hwOutputContent").classList.remove("hidden");
+      } finally {
+        document.getElementById("hwLoadingState").classList.add("hidden");
+        lucide.createIcons();
+      }
+    }
+
+    /* =========================================================================
+       7. WORKSPACE 2: MATH STUDIO, DRAW-TO-SOLVE & 2D GRAPHING CALCULATOR
+       ========================================================================= */
+    function initMathSymbolPad() {
+      document.getElementById("mathSymbolPad").innerHTML = MATH_SYMBOLS.map((s, i) => `<button type="button" onclick="insertMathSymbol(${i})" class="btn-secondary py-1 text-xs font-mono font-bold">${s.label}</button>`).join("");
+    }
+    function insertMathSymbol(i) {
+      const ta = document.getElementById("mathInput");
+      ta.value += MATH_SYMBOLS[i].latex;
+      updateMathPreview();
+    }
+    function setMathInputMode(mode) {
+      ["type", "draw", "photo"].forEach(m => {
+        const cap = m.charAt(0).toUpperCase() + m.slice(1);
+        document.getElementById(`mathMode${cap}Btn`).style.backgroundColor = m === mode ? "var(--accent)" : "transparent";
+        document.getElementById(`mathMode${cap}Btn`).style.color = m === mode ? "#FFF" : "var(--text-secondary)";
+        document.getElementById(`mathPanel${cap}`).classList.toggle("hidden", m !== mode);
+      });
+      if (mode === "draw") setTimeout(resizeScratchpad, 30);
+    }
+    function updateMathPreview() {
+      const raw = document.getElementById("mathInput").value.trim();
+      const el = document.getElementById("mathLivePreview");
+      if (!raw) { el.innerHTML = `<span class="text-xs italic" style="color: var(--text-muted);">Equation preview...</span>`; return; }
+      el.innerHTML = formatRichText(/\$/.test(raw) ? raw : `$$${raw}$$`);
+      renderMathInContainer(el);
+    }
+    function handleMathPhotoUpload(e) {
+      const f = e.target.files?.[0]; if (!f) return;
+      const r = new FileReader();
+      r.onload = ev => {
+        state.mathPhoto = { base64: ev.target.result.split(",")[1], mimeType: f.type };
+        document.getElementById("mathPreviewImg").src = ev.target.result;
+        document.getElementById("mathPhotoPlaceholder").classList.add("hidden");
+        document.getElementById("mathPhotoPreviewWrap").classList.remove("hidden");
+      };
+      r.readAsDataURL(f);
+    }
+
+    // Scratchpad
+    let scratchCtx, scratchDrawing = false, scratchColor = "#0F172A", scratchEraser = false, scratchStrokes = [], curStroke = null;
+    function initScratchpad() {
+      const c = document.getElementById("scratchCanvas"); scratchCtx = c.getContext("2d");
+      const pos = ev => { const r = c.getBoundingClientRect(); const p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX - r.left, y: p.clientY - r.top }; };
+      const start = ev => { ev.preventDefault(); scratchDrawing = true; curStroke = { color: scratchEraser ? "#FFF" : scratchColor, width: Number(document.getElementById("scratchWidth").value) * (scratchEraser ? 3 : 1), pts: [pos(ev)] }; scratchStrokes.push(curStroke); redrawScratchpad(); };
+      const move = ev => { if (!scratchDrawing) return; ev.preventDefault(); curStroke.pts.push(pos(ev)); redrawScratchpad(); };
+      const end = () => { scratchDrawing = false; };
+      c.addEventListener("mousedown", start); c.addEventListener("mousemove", move); window.addEventListener("mouseup", end);
+      c.addEventListener("touchstart", start, { passive: false }); c.addEventListener("touchmove", move, { passive: false }); c.addEventListener("touchend", end);
+    }
+    function resizeScratchpad() { const ct = document.getElementById("scratchContainer"), c = document.getElementById("scratchCanvas"); if (!ct || !ct.clientWidth) return; c.width = ct.clientWidth; c.height = ct.clientHeight; redrawScratchpad(); }
+    function redrawScratchpad() {
+      const c = document.getElementById("scratchCanvas"); if (!scratchCtx || !c.width) return;
+      scratchCtx.fillStyle = "#FFF"; scratchCtx.fillRect(0, 0, c.width, c.height);
+      for (const s of scratchStrokes) {
+        scratchCtx.strokeStyle = s.color; scratchCtx.lineWidth = s.width; scratchCtx.lineCap = "round";
+        scratchCtx.beginPath(); scratchCtx.moveTo(s.pts[0].x, s.pts[0].y);
+        for (let i = 1; i < s.pts.length; i++) scratchCtx.lineTo(s.pts[i].x, s.pts[i].y);
+        scratchCtx.stroke();
+      }
+    }
+    function setScratchColor(c) { scratchColor = c; scratchEraser = false; }
+    function toggleScratchEraser() { scratchEraser = !scratchEraser; }
+    function undoScratchpad() { scratchStrokes.pop(); redrawScratchpad(); }
+    function clearScratchpad() { scratchStrokes = []; redrawScratchpad(); }
+
+    // 2D Grapher
+    let graphEquations = [{ expr: "x^2 - 4", color: "#3B82F6" }, { expr: "sin(x)*3", color: "#10B981" }];
+    const graphView = { cx: 0, cy: 0, scale: 34, drag: false, lx: 0, ly: 0 };
+    function initGraphCalculator() {
+      renderGraphInputs();
+      const c = document.getElementById("graphCanvas");
+      c.addEventListener("mousedown", e => { graphView.drag = true; graphView.lx = e.clientX; graphView.ly = e.clientY; });
+      window.addEventListener("mouseup", () => { graphView.drag = false; });
+      c.addEventListener("mousemove", e => {
+        const r = c.getBoundingClientRect();
+        const wx = graphView.cx + (e.clientX - r.left - c.width / 2) / graphView.scale;
+        const wy = graphView.cy - (e.clientY - r.top - c.height / 2) / graphView.scale;
+        document.getElementById("graphCoordBadge").textContent = `x: ${wx.toFixed(2)}, y: ${wy.toFixed(2)}`;
+        if (graphView.drag) { graphView.cx -= (e.clientX - graphView.lx) / graphView.scale; graphView.cy += (e.clientY - graphView.ly) / graphView.scale; graphView.lx = e.clientX; graphView.ly = e.clientY; drawGraph(); }
+      });
+      resizeGraphCanvas();
+    }
+    function renderGraphInputs() {
+      document.getElementById("graphEqList").innerHTML = graphEquations.map((eq, i) => `
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full" style="background:${eq.color}"></span>
+          <input type="text" value="${escapeHtml(eq.expr)}" oninput="graphEquations[${i}].expr=this.value;drawGraph();" class="themed-input flex-1 px-2 py-1 text-xs font-mono" />
+        </div>
+      `).join("");
+    }
+    function addGraphEquation(expr) { graphEquations.push({ expr, color: ["#F59E0B", "#EC4899", "#8B5CF6"][graphEquations.length % 3] }); renderGraphInputs(); drawGraph(); }
+    function zoomGraph(f) { graphView.scale = Math.max(10, Math.min(200, graphView.scale / f)); drawGraph(); }
+    function resetGraphView() { graphView.cx = 0; graphView.cy = 0; graphView.scale = 34; drawGraph(); }
+    function resizeGraphCanvas() { const ct = document.getElementById("graphContainer"), c = document.getElementById("graphCanvas"); if (!ct || !ct.clientWidth) return; c.width = ct.clientWidth; c.height = ct.clientHeight; drawGraph(); }
+    function compileExpr(raw) {
+      try {
+        const s = raw.toLowerCase().replace(/(\d)([a-z(])/g, "$1*$2").replace(/\^/g, "**").replace(/\b(sin|cos|tan|sqrt|abs|log)\b/g, "Math.$1").replace(/\bpi\b/g, "Math.PI");
+        return new Function("x", `try{return (${s});}catch{return NaN;}`);
+      } catch { return null; }
+    }
+    function drawGraph() {
+      const c = document.getElementById("graphCanvas"); if (!c || !c.width) return;
+      const ctx = c.getContext("2d"), w = c.width, h = c.height;
+      ctx.fillStyle = "#0F172A"; ctx.fillRect(0, 0, w, h);
+      const sx = x => w / 2 + (x - graphView.cx) * graphView.scale, sy = y => h / 2 - (y - graphView.cy) * graphView.scale;
+      ctx.strokeStyle = "#1E293B"; ctx.lineWidth = 1;
+      for (let x = -20; x <= 20; x++) { ctx.beginPath(); ctx.moveTo(sx(x), 0); ctx.lineTo(sx(x), h); ctx.stroke(); }
+      for (let y = -20; y <= 20; y++) { ctx.beginPath(); ctx.moveTo(0, sy(y)); ctx.lineTo(w, sy(y)); ctx.stroke(); }
+      ctx.strokeStyle = "#64748B"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(0, sy(0)); ctx.lineTo(w, sy(0)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx(0), 0); ctx.lineTo(sx(0), h); ctx.stroke();
+
+      const deriv = document.getElementById("graphShowDeriv")?.checked;
+      graphEquations.forEach(eq => {
+        const fn = compileExpr(eq.expr); if (!fn) return;
+        ctx.strokeStyle = eq.color; ctx.lineWidth = 2.2; ctx.beginPath();
+        let started = false;
+        for (let px = 0; px <= w; px += 2) {
+          const x = graphView.cx + (px - w / 2) / graphView.scale, y = fn(x);
+          if (!isFinite(y) || Math.abs(y) > 1e4) { started = false; continue; }
+          if (!started) { ctx.moveTo(px, sy(y)); started = true; } else ctx.lineTo(px, sy(y));
+        }
+        ctx.stroke();
+        if (deriv) {
+          ctx.save(); ctx.setLineDash([4, 4]); ctx.globalAlpha = 0.6; ctx.beginPath();
+          let ds = false;
+          for (let px = 0; px <= w; px += 2) {
+            const x = graphView.cx + (px - w / 2) / graphView.scale, dy = (fn(x + 1e-4) - fn(x - 1e-4)) / 2e-4;
+            if (!isFinite(dy)) { ds = false; continue; }
+            if (!ds) { ctx.moveTo(px, sy(dy)); ds = true; } else ctx.lineTo(px, sy(dy));
+          }
+          ctx.stroke(); ctx.restore();
+        }
+      });
+    }
+
+    async function solveMathStudio(src) {
+      const parts = [];
+      let txt = "";
+      if (src === "type") { txt = document.getElementById("mathInput").value.trim(); if (!txt) return showToast("Enter a math equation.", "error"); }
+      else if (src === "draw") { if (!scratchStrokes.length) return showToast("Draw on scratchpad first.", "error"); parts.push({ inlineData: { mimeType: "image/png", data: document.getElementById("scratchCanvas").toDataURL("image/png").split(",")[1] } }); txt = "Transcribe and solve this handwritten math."; }
+      else if (src === "photo") { if (!state.mathPhoto) return showToast("Upload a photo first.", "error"); parts.push({ inlineData: state.mathPhoto }); txt = "OCR and solve this math photo."; }
+
+      document.getElementById("mathEmptyState").classList.add("hidden");
+      document.getElementById("mathOutputContent").classList.add("hidden");
+      document.getElementById("mathLoadingState").classList.remove("hidden");
+
+      const schema = {
+        type: "OBJECT",
+        properties: {
+          title: { type: "STRING" }, exactEquation: { type: "STRING" },
+          steps: { type: "ARRAY", items: { type: "OBJECT", properties: { stepTitle: { type: "STRING" }, mathExpression: { type: "STRING" }, explanation: { type: "STRING" } }, required: ["stepTitle", "mathExpression", "explanation"] } },
+          finalAnswer: { type: "STRING" }
+        },
+        required: ["title", "exactEquation", "steps", "finalAnswer"]
+      };
+      parts.push({ text: `Mode: ${state.learningMode}\nProblem: ${txt}` });
+
+      try {
+        const res = await callGemini({ parts, systemInstruction: buildSystemPrompt("Precision Math Engine. Wrap all math in LaTeX $...$ or $$...$$."), responseSchema: schema });
+        state.lastResults.math = res;
+        const out = document.getElementById("mathOutputContent");
+        out.innerHTML = `
+          <div class="flex items-center justify-between pb-2 border-b" style="border-color: var(--border-color);">
+            <h3 class="font-extrabold text-base">${escapeHtml(res.title)}</h3>
+            <button onclick="saveCurrentToVault('math')" class="btn-primary px-3 py-1 text-xs font-bold">Save</button>
+          </div>
+          <div class="themed-subcard p-3 rich-math">${formatRichText(ensureMathDisplay(res.exactEquation))}</div>
+          <div class="space-y-2.5">${res.steps.map((s, i) => `
+            <div class="themed-subcard p-3 space-y-1">
+              <div class="font-bold text-xs">${i + 1}. ${escapeHtml(s.stepTitle)}</div>
+              <div class="rich-math">${formatRichText(ensureMathDisplay(s.mathExpression))}</div>
+              <div class="text-xs rich-math" style="color: var(--text-secondary);">${formatRichText(s.explanation)}</div>
+            </div>
+          `).join("")}</div>
+          <div class="p-3.5 rounded-xl success-box font-bold rich-math">${formatRichText(res.finalAnswer)}</div>
+        `;
+        out.classList.remove("hidden");
+        renderMathInContainer(out);
+        logTranscript("Math Studio", txt, res.finalAnswer);
+        awardXP(30, "Math Breakdown");
+      } catch (e) {
+        document.getElementById("mathOutputContent").innerHTML = `<div class="p-4 rounded-xl danger-box text-sm">${escapeHtml(e.message)}</div>`;
+        document.getElementById("mathOutputContent").classList.remove("hidden");
+      } finally {
+        document.getElementById("mathLoadingState").classList.add("hidden");
+      }
+    }
+
+    /* =========================================================================
+       8. WORKSPACE 3: ESSAY STUDIO
+       ========================================================================= */
+    function setEssayMode(m) {
+      state.essayMode = m;
+      document.getElementById("essayProofForm").classList.toggle("hidden", m !== "proofread");
+      document.getElementById("essayGenForm").classList.toggle("hidden", m !== "generate");
+      document.getElementById("essayModeProofBtn").style.backgroundColor = m === "proofread" ? "var(--accent)" : "transparent";
+      document.getElementById("essayModeProofBtn").style.color = m === "proofread" ? "#FFF" : "var(--text-secondary)";
+      document.getElementById("essayModeGenBtn").style.backgroundColor = m === "generate" ? "var(--accent)" : "transparent";
+      document.getElementById("essayModeGenBtn").style.color = m === "generate" ? "#FFF" : "var(--text-secondary)";
+    }
+
+    async function runEssayProofread() {
+      const draft = document.getElementById("proofDraftInput").value.trim();
+      if (draft.length < 15) return showToast("Paste an essay draft first.", "error");
+      document.getElementById("essayEmptyState").classList.add("hidden");
+      document.getElementById("essayOutputContent").classList.add("hidden");
+      document.getElementById("essayLoadingState").classList.remove("hidden");
+
+      const schema = {
+        type: "OBJECT",
+        properties: {
+          title: { type: "STRING" }, letterGrade: { type: "STRING" }, percentageScore: { type: "NUMBER" },
+          rubricBreakdown: { type: "ARRAY", items: { type: "OBJECT", properties: { criterion: { type: "STRING" }, score: { type: "NUMBER" }, maxScore: { type: "NUMBER" }, comment: { type: "STRING" } }, required: ["criterion", "score", "maxScore", "comment"] } },
+          polishedVersion: { type: "STRING" }
+        },
+        required: ["title", "letterGrade", "percentageScore", "rubricBreakdown", "polishedVersion"]
+      };
+      try {
+        const res = await callGemini({
+          parts: [{ text: `Rubric: ${document.getElementById("rubricTextInput").value || "Standard 4-part academic rubric (25 pts each)"}\nDraft:\n${draft}` }],
+          systemInstruction: buildSystemPrompt("You are a rubric-based writing coach."),
+          responseSchema: schema
+        });
+        state.lastResults.essay = res;
+        window.__lastEssayText = `${res.title}\n\n${res.polishedVersion}`;
+        const out = document.getElementById("essayOutputContent");
+        out.innerHTML = `
+          <div class="flex items-center justify-between pb-3 border-b" style="border-color: var(--border-color);">
+            <div class="flex items-center gap-3">
+              <div class="px-3 py-1.5 rounded-xl font-extrabold text-white" style="background: var(--accent);">${escapeHtml(res.letterGrade)} (${Math.round(res.percentageScore)}%)</div>
+              <h3 class="font-bold text-base">${escapeHtml(res.title)}</h3>
+            </div>
+            <div class="flex gap-1.5">
+              <button onclick="downloadEssay('doc')" class="btn-secondary px-2.5 py-1 text-xs font-bold">.DOC</button>
+              <button onclick="downloadEssay('txt')" class="btn-secondary px-2.5 py-1 text-xs font-bold">.TXT</button>
+              <button onclick="saveCurrentToVault('essay')" class="btn-primary px-2.5 py-1 text-xs font-bold">Save</button>
+            </div>
+          </div>
+          <div class="space-y-2">${res.rubricBreakdown.map(r => `
+            <div class="themed-subcard p-3 flex items-center justify-between text-xs">
+              <div><strong>${escapeHtml(r.criterion)}</strong><p style="color: var(--text-muted);">${escapeHtml(r.comment)}</p></div>
+              <span class="px-2 py-1 rounded font-mono font-bold accent-badge">${r.score}/${r.maxScore}</span>
+            </div>
+          `).join("")}</div>
+          <div class="themed-subcard p-4 text-sm leading-7 whitespace-pre-line"><strong class="block text-xs uppercase mb-1" style="color: var(--accent-text);">Polished Revision</strong>${escapeHtml(res.polishedVersion)}</div>
+        `;
+        out.classList.remove("hidden");
+        logTranscript("Essay Coach", draft.slice(0, 80), `Graded ${res.letterGrade} (${res.percentageScore}%)`);
+        awardXP(35, "Essay Graded");
+      } catch (e) {
+        showToast(e.message, "error");
+      } finally {
+        document.getElementById("essayLoadingState").classList.add("hidden");
+      }
+    }
+
+    async function runEssayGenerator() {
+      const topic = document.getElementById("genTopicInput").value.trim();
+      if (!topic) return showToast("Enter a topic.", "error");
+      document.getElementById("essayEmptyState").classList.add("hidden");
+      document.getElementById("essayOutputContent").classList.add("hidden");
+      document.getElementById("essayLoadingState").classList.remove("hidden");
+      try {
+        const txt = await callGemini({
+          parts: [{ text: `Write a ${document.getElementById("genTypeInput").value} essay with ${document.getElementById("genCitationInput").value} citations on: ${topic}` }],
+          systemInstruction: buildSystemPrompt("Write a structured academic essay.")
+        });
+        state.lastResults.essay = { title: topic.slice(0, 40), polishedVersion: txt };
+        window.__lastEssayText = txt;
+        const out = document.getElementById("essayOutputContent");
+        out.innerHTML = `
+          <div class="flex justify-between pb-2 border-b" style="border-color: var(--border-color);">
+            <h3 class="font-bold text-base">Generated Essay</h3>
+            <div class="flex gap-1.5">
+              <button onclick="downloadEssay('doc')" class="btn-secondary px-2.5 py-1 text-xs font-bold">.DOC</button>
+              <button onclick="saveCurrentToVault('essay')" class="btn-primary px-2.5 py-1 text-xs font-bold">Save</button>
+            </div>
+          </div>
+          <div class="text-sm leading-7 whitespace-pre-line">${escapeHtml(txt)}</div>
+        `;
+        out.classList.remove("hidden");
+        logTranscript("Essay Generator", topic, txt.slice(0, 140));
+        awardXP(25, "Essay Drafted");
+      } catch (e) { showToast(e.message, "error"); }
+      finally { document.getElementById("essayLoadingState").classList.add("hidden"); }
+    }
+
+    function downloadEssay(ext) {
+      if (!window.__lastEssayText) return;
+      const blob = new Blob([window.__lastEssayText], { type: ext === "doc" ? "application/msword" : "text/plain" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `omnischolar-essay.${ext}`; a.click();
+    }
+
+    /* =========================================================================
+       9. WORKSPACE 4: FEYNMAN MODE ("TEACH THE AI")
+       ========================================================================= */
+    async function startFeynmanSession() {
+      const topic = document.getElementById("feynmanTopicInput").value.trim();
+      if (!topic) return showToast("Enter a topic to teach!", "error");
+      state.feynman = { topic, history: [], score: 0, bonusAwarded: false };
+      updateFeynmanMeter(0);
+
+      const box = document.getElementById("feynmanChatBox");
+      box.innerHTML = `<div class="p-3 rounded-xl themed-subcard text-sm"><strong>🤔 AI Classmate:</strong> Hey! I'm totally stuck on <strong>${escapeHtml(topic)}</strong>. Can you explain it to me in your own words like I'm brand new to it?</div>`;
+      state.feynman.history.push(`Classmate: I'm stuck on ${topic}. Explain it to me!`);
+    }
+
+    async function sendFeynmanExplanation() {
+      const input = document.getElementById("feynmanReplyInput");
+      const msg = input.value.trim();
+      if (!msg) return;
+      if (!state.feynman.topic) {
+        document.getElementById("feynmanTopicInput").value = "General Concept";
+        startFeynmanSession();
+      }
+      input.value = "";
+      const box = document.getElementById("feynmanChatBox");
+      box.innerHTML += `<div class="p-3 rounded-xl accent-badge text-sm text-right"><strong>You:</strong> ${escapeHtml(msg)}</div>`;
+      box.scrollTop = box.scrollHeight;
+      state.feynman.history.push(`Student: ${msg}`);
+
+      const schema = {
+        type: "OBJECT",
+        properties: {
+          classmateReply: { type: "STRING" },
+          comprehensionScore: { type: "NUMBER" },
+          feedbackTip: { type: "STRING" }
+        },
+        required: ["classmateReply", "comprehensionScore", "feedbackTip"]
+      };
+
+      try {
+        const res = await callGemini({
+          parts: [{ text: `Topic: ${state.feynman.topic}\nConversation so far:\n${state.feynman.history.join("\n")}\n\nAct as a curious, slightly confused classmate. Ask a probing follow-up question to test if the student truly understands, and score their demonstrated comprehension from 0 to 100.` }],
+          systemInstruction: buildSystemPrompt("You are in Feynman Mode (confused classmate). Be friendly and curious."),
+          responseSchema: schema
+        });
+        state.feynman.history.push(`Classmate: ${res.classmateReply}`);
+        updateFeynmanMeter(res.comprehensionScore);
+        box.innerHTML += `
+          <div class="p-3.5 rounded-xl themed-subcard text-sm space-y-1.5">
+            <div><strong>🤔 AI Classmate:</strong> ${escapeHtml(res.classmateReply)}</div>
+            <div class="text-[11px] font-semibold" style="color: var(--accent-text);">Coach Tip: ${escapeHtml(res.feedbackTip)}</div>
+          </div>
+        `;
+        box.scrollTop = box.scrollHeight;
+        logTranscript("Feynman Mode", `Taught ${state.feynman.topic}: ${msg}`, `Score: ${res.comprehensionScore}%`);
+
+        if (res.comprehensionScore >= 80 && !state.feynman.bonusAwarded) {
+          state.feynman.bonusAwarded = true;
+          awardXP(75, "Feynman Mastery Achieved!");
+        }
+      } catch (e) { showToast(e.message, "error"); }
+    }
+
+    function updateFeynmanMeter(score) {
+      const s = Math.max(0, Math.min(100, Math.round(score)));
+      state.feynman.score = s;
+      document.getElementById("feynmanScoreText").textContent = `${s}%`;
+      document.getElementById("feynmanScoreBar").style.width = `${s}%`;
+    }
+
+    /* =========================================================================
+       10. WORKSPACE 5: COMMUTE-READY STUDY PODCASTS (WEB SPEECH API)
+       ========================================================================= */
+    function populatePodcastVaultDropdown() {
+      const p = getActiveProfile();
+      const sel = document.getElementById("podcastVaultSelect");
+      sel.innerHTML = `<option value="">-- Choose a saved Vault item --</option>` +
+        (p.vault || []).map(v => `<option value="${v.id}">${escapeHtml(v.title)}</option>`).join("");
+    }
+
+    function loadVaultToPodcast() {
+      const id = document.getElementById("podcastVaultSelect").value;
+      const item = (getActiveProfile().vault || []).find(v => v.id === id);
+      if (item) document.getElementById("podcastNotesInput").value = `${item.title}\n${item.fullContent}`;
+    }
+
+    async function generateStudyPodcast() {
+      const notes = document.getElementById("podcastNotesInput").value.trim();
+      if (!notes) return showToast("Paste study notes or select a Vault item.", "error");
+      const btn = document.getElementById("podcastGenBtn");
+      btn.disabled = true; btn.textContent = "Generating 2-Host Script...";
+
+      const schema = {
+        type: "ARRAY",
+        items: { type: "OBJECT", properties: { host: { type: "STRING" }, text: { type: "STRING" } }, required: ["host", "text"] }
+      };
+
+      try {
+        const lines = await callGemini({
+          parts: [{ text: `Turn these study notes into an engaging 8-line conversational study podcast between two hosts named Alex and Sam. Keep each line concise and easy to listen to:\n${notes}` }],
+          systemInstruction: buildSystemPrompt("Create a lively, clear 2-host educational podcast script."),
+          responseSchema: schema
+        });
+        state.podcast = { lines, playing: false, currentIdx: 0, speed: state.podcast.speed };
+        renderPodcastScript();
+        awardXP(20, "Study Podcast Created");
+      } catch (e) { showToast(e.message, "error"); }
+      finally { btn.disabled = false; btn.innerHTML = `<i data-lucide="mic-2" class="w-4 h-4"></i> Generate 2-Host Podcast`; lucide.createIcons(); }
+    }
+
+    function renderPodcastScript() {
+      const box = document.getElementById("podcastScriptBox");
+      box.innerHTML = state.podcast.lines.map((l, i) => `
+        <div id="podLine_${i}" class="p-3 rounded-xl themed-subcard text-sm transition-all border-l-4" style="border-left-color: ${l.host === "Alex" ? "#3B82F6" : "#10B981"};">
+          <span class="text-xs font-extrabold uppercase ${l.host === "Alex" ? "text-blue-400" : "text-emerald-400"}">${escapeHtml(l.host)}:</span>
+          <span class="ml-1">${escapeHtml(l.text)}</span>
+        </div>
+      `).join("");
+    }
+
+    function setPodcastSpeed(rate) {
+      state.podcast.speed = rate;
+      showToast(`Podcast speed set to ${rate}x`, "info");
+    }
+
+    function togglePodcastPlayback() {
+      if (!state.podcast.lines.length) return showToast("Generate a podcast first!", "error");
+      if (state.podcast.playing) {
+        stopPodcastPlayback();
+      } else {
+        state.podcast.playing = true;
+        document.getElementById("podPlayBtn").innerHTML = `<i data-lucide="pause" class="w-4 h-4"></i> Pause`;
+        lucide.createIcons();
+        speakPodcastLine(state.podcast.currentIdx);
+      }
+    }
+
+    function speakPodcastLine(idx) {
+      if (!state.podcast.playing || idx >= state.podcast.lines.length) {
+        stopPodcastPlayback();
+        return;
+      }
+      state.podcast.currentIdx = idx;
+      document.querySelectorAll("[id^='podLine_']").forEach(el => el.style.opacity = "0.55");
+      const curEl = document.getElementById(`podLine_${idx}`);
+      if (curEl) { curEl.style.opacity = "1"; curEl.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+
+      const line = state.podcast.lines[idx];
+      const u = new SpeechSynthesisUtterance(line.text);
+      u.rate = state.podcast.speed;
+      u.pitch = line.host === "Alex" ? 0.95 : 1.15;
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 1) u.voice = line.host === "Alex" ? voices[0] : voices[Math.min(1, voices.length - 1)];
+      u.onend = () => { if (state.podcast.playing) speakPodcastLine(idx + 1); };
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    }
+
+    function stopPodcastPlayback() {
+      state.podcast.playing = false;
+      state.podcast.currentIdx = 0;
+      window.speechSynthesis.cancel();
+      document.querySelectorAll("[id^='podLine_']").forEach(el => el.style.opacity = "1");
+      document.getElementById("podPlayBtn").innerHTML = `<i data-lucide="play" class="w-4 h-4"></i> Play`;
+      lucide.createIcons();
+    }
+
+    /* =========================================================================
+       11. WORKSPACE 6: GRADE-SCALED SIBLING BATTLES & FAMILY LEADERBOARD
+       ========================================================================= */
+    function renderBattleSetupAndLeaderboard() {
+      const students = familyStore.profiles.filter(p => p.role === "student");
+      const opts = students.map(s => `<option value="${s.id}">${s.avatar} ${escapeHtml(s.name)} (${s.gradeLabel})</option>`).join("");
+      document.getElementById("battleP1Select").innerHTML = opts;
+      document.getElementById("battleP2Select").innerHTML = opts;
+      if (students.length > 1) document.getElementById("battleP2Select").selectedIndex = 1;
+
+      const sorted = [...students].sort((a, b) => (b.xp || 0) - (a.xp || 0));
+      document.getElementById("familyLeaderboardList").innerHTML = sorted.map((s, i) => `
+        <div class="themed-subcard p-3 flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="font-extrabold text-sm w-5 text-center">${i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉"}</span>
+            <span class="text-xl">${s.avatar}</span>
+            <div><div class="font-bold text-sm">${escapeHtml(s.name)}</div><div class="text-[11px]" style="color: var(--text-muted);">${s.gradeLabel} • 🔥 ${s.streak}d</div></div>
+          </div>
+          <span class="font-mono font-extrabold text-sm accent-badge px-2.5 py-1 rounded-lg">${s.xp} XP</span>
+        </div>
+      `).join("");
+    }
+
+    async function startSiblingBattle() {
+      const p1 = familyStore.profiles.find(p => p.id === document.getElementById("battleP1Select").value);
+      const p2 = familyStore.profiles.find(p => p.id === document.getElementById("battleP2Select").value);
+      const topic = document.getElementById("battleTopicSelect").value;
+      if (!p1 || !p2) return;
+
+      const btn = document.getElementById("startBattleBtn");
+      btn.disabled = true; btn.textContent = "Generating Grade-Scaled Questions...";
+
+      const schema = {
+        type: "ARRAY",
+        items: {
+          type: "OBJECT",
+          properties: { forPlayer: { type: "NUMBER" }, question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, correctIndex: { type: "NUMBER" } },
+          required: ["forPlayer", "question", "options", "correctIndex"]
+        }
+      };
+
+      try {
+        const questions = await callGemini({
+          parts: [{ text: `Create 6 alternating trivia questions on ${topic}: questions 1,3,5 for Player 1 (${p1.name}, ${p1.gradeLabel}) and questions 2,4,6 for Player 2 (${p2.name}, ${p2.gradeLabel}). Scale each question fairly to that player's grade! Provide 4 options and correctIndex (0-3).` }],
+          systemInstruction: "Return crisp, fun, grade-scaled trivia JSON.",
+          responseSchema: schema
+        });
+
+        state.battle = { active: true, p1, p2, s1: 0, s2: 0, qIdx: 0, questions, secondsLeft: 60, timerId: null };
+        document.getElementById("battleSetupCard").classList.add("hidden");
+        document.getElementById("battleResultCard").classList.add("hidden");
+        document.getElementById("battleArenaCard").classList.remove("hidden");
+        document.getElementById("bP1Name").textContent = `${p1.avatar} ${p1.name}`;
+        document.getElementById("bP2Name").textContent = `${p2.avatar} ${p2.name}`;
+        renderBattleQuestion();
+
+        state.battle.timerId = setInterval(() => {
+          state.battle.secondsLeft--;
+          document.getElementById("battleTimer").textContent = `${state.battle.secondsLeft}s`;
+          if (state.battle.secondsLeft <= 0) finishSiblingBattle();
+        }, 1000);
+      } catch (e) { showToast(e.message, "error"); }
+      finally { btn.disabled = false; btn.innerHTML = `<i data-lucide="flame" class="w-4 h-4"></i> Start 60-Second Battle!`; lucide.createIcons(); }
+    }
+
+    function renderBattleQuestion() {
+      const b = state.battle;
+      if (b.qIdx >= b.questions.length) { finishSiblingBattle(); return; }
+      const q = b.questions[b.qIdx];
+      const curPlayer = q.forPlayer === 1 ? b.p1 : b.p2;
+      document.getElementById("bP1Score").textContent = b.s1;
+      document.getElementById("bP2Score").textContent = b.s2;
+      document.getElementById("battleTurnBanner").textContent = `${curPlayer.avatar} ${curPlayer.name}'s Turn (${curPlayer.gradeLabel})`;
+      document.getElementById("battleQuestionText").innerHTML = formatRichText(q.question);
+      document.getElementById("battleOptionsGrid").innerHTML = q.options.map((opt, idx) => `
+        <button onclick="answerBattleQuestion(${idx})" class="btn-secondary p-3.5 text-left text-sm font-semibold hover:border-blue-500">${escapeHtml(opt)}</button>
+      `).join("");
+      renderMathInContainer(document.getElementById("battleArenaCard"));
+    }
+
+    function answerBattleQuestion(idx) {
+      const b = state.battle;
+      const q = b.questions[b.qIdx];
+      if (idx === q.correctIndex) {
+        if (q.forPlayer === 1) b.s1 += 10; else b.s2 += 10;
+        showToast("Correct! +10 pts", "success");
+      } else {
+        showToast("Missed!", "error");
+      }
+      b.qIdx++;
+      renderBattleQuestion();
+    }
+
+    function finishSiblingBattle() {
+      clearInterval(state.battle.timerId);
+      const b = state.battle;
+      document.getElementById("battleArenaCard").classList.add("hidden");
+      const winner = b.s1 > b.s2 ? b.p1 : b.s2 > b.s1 ? b.p2 : null;
+      if (winner) { winner.xp += 50; saveFamilyStore(); }
+      else { b.p1.xp += 25; b.p2.xp += 25; saveFamilyStore(); }
+
+      const card = document.getElementById("battleResultCard");
+      card.innerHTML = `
+        <div class="text-4xl">🏆</div>
+        <h3 class="text-xl font-extrabold">${winner ? `${winner.avatar} ${escapeHtml(winner.name)} Wins! (+50 XP)` : "It's a Tie! (+25 XP each)"}</h3>
+        <p class="text-sm" style="color: var(--text-muted);">${escapeHtml(b.p1.name)}: ${b.s1} pts • ${escapeHtml(b.p2.name)}: ${b.s2} pts</p>
+        <button onclick="document.getElementById('battleResultCard').classList.add('hidden'); document.getElementById('battleSetupCard').classList.remove('hidden');" class="btn-primary px-5 py-2 text-xs font-bold">Play Again</button>
+      `;
+      card.classList.remove("hidden");
+      renderBattleSetupAndLeaderboard();
+      updateTopProfileUI();
+    }
+
+    /* =========================================================================
+       12. WORKSPACE 7: ASSIGNMENT PLANNER (CANVAS / GOOGLE CLASSROOM SYNC)
+       ========================================================================= */
+    function renderPlanner() {
+      const p = getActiveProfile();
+      const list = p.assignments || [];
+      const grid = document.getElementById("plannerAssignmentsGrid");
+      if (!list.length) {
+        grid.innerHTML = `<div class="col-span-full themed-card p-8 text-center text-sm" style="color: var(--text-muted);">No assignments yet. Click Sync Canvas or Google Classroom above!</div>`;
+        return;
+      }
+      grid.innerHTML = list.map(a => `
+        <div class="themed-card p-4 flex flex-col justify-between gap-3">
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="px-2 py-0.5 rounded-full accent-badge font-bold">${escapeHtml(a.source)}</span>
+              <span class="font-bold text-amber-500">Due: ${escapeHtml(a.due)}</span>
+            </div>
+            <h4 class="font-bold text-sm">${escapeHtml(a.title)}</h4>
+            <p class="text-xs" style="color: var(--text-secondary);">${escapeHtml(a.prompt)}</p>
+          </div>
+          <button onclick="launchAssignment('${a.id}')" class="btn-primary w-full py-2 text-xs font-bold">Open in ${a.targetTab === "essay" ? "Essay Studio" : "Homework Solver"}</button>
+        </div>
+      `).join("");
+    }
+
+    function simulateLmsSync(lmsName) {
+      const p = getActiveProfile();
+      p.assignments = p.assignments || [];
+      p.assignments.unshift({
+        id: "sync-" + Date.now(),
+        title: `${lmsName}: Weekly Mastery Check`,
+        subject: "Math", due: "Wednesday", source: lmsName, status: "Synced",
+        targetTab: "homework",
+        prompt: p.gradeLevel === "elementary"
+          ? "Solve: 4/6 - 1/6 and explain what the numerator means."
+          : "Find the vertex and x-intercepts of y = x^2 - 6x + 8."
+      });
+      saveFamilyStore();
+      renderPlanner();
+      showToast(`Synced new assignment from ${lmsName}!`, "success");
+    }
+
+    function launchAssignment(id) {
+      const a = (getActiveProfile().assignments || []).find(x => x.id === id);
+      if (!a) return;
+      if (a.targetTab === "essay") {
+        switchTab("essay"); setEssayMode("generate");
+        document.getElementById("genTopicInput").value = a.prompt;
+      } else {
+        switchTab("homework"); setHwSubMode("solve");
+        document.getElementById("hwTextInput").value = a.prompt;
+      }
+      showToast(`Loaded "${a.title}"!`, "success");
+    }
+
+    /* =========================================================================
+       13. WORKSPACE 8: VAULT, SPACED-REPETITION, TIMED EXAM & HEATMAP
+       ========================================================================= */
+    function setVaultSubTab(sub) {
+      state.vaultSubTab = sub;
+      ["items", "decks", "exam", "heatmap"].forEach(s => {
+        const cap = s.charAt(0).toUpperCase() + s.slice(1);
+        document.getElementById(`vaultSub${cap}Btn`).style.backgroundColor = s === sub ? "var(--accent)" : "transparent";
+        document.getElementById(`vaultSub${cap}Btn`).style.color = s === sub ? "#FFF" : "var(--text-secondary)";
+        document.getElementById(`vaultPanel${cap}`).classList.toggle("hidden", s !== sub);
+      });
+    }
+
+    function saveCurrentToVault(src) {
+      const p = getActiveProfile();
+      const d = state.lastResults[src];
+      if (!d) return;
+      p.vault = p.vault || [];
+      p.vault.unshift({
+        id: "v-" + Date.now(), title: d.title || "Saved Work",
+        subject: src === "math" ? "Math" : src === "essay" ? "Essay" : (d.detectedSubject || "General"),
+        date: new Date().toLocaleDateString(),
+        summary: (d.summaryOrProblem || d.exactEquation || "Saved study item").slice(0, 100),
+        fullContent: d.finalResult || d.finalAnswer || d.polishedVersion || ""
+      });
+      saveFamilyStore();
+      showToast("Saved to your private Study Vault!", "success");
+    }
+
+    function renderVault() {
+      const list = getActiveProfile().vault || [];
+      document.getElementById("vaultGrid").innerHTML = list.length ? list.map(v => `
+        <div class="themed-card p-4 space-y-2">
+          <div class="flex justify-between text-[11px]"><span class="accent-badge px-2 py-0.5 rounded-full font-bold">${escapeHtml(v.subject)}</span><span style="color: var(--text-muted);">${v.date}</span></div>
+          <h4 class="font-bold text-sm">${escapeHtml(v.title)}</h4>
+          <p class="text-xs rich-math" style="color: var(--text-secondary);">${formatRichText(v.summary)}</p>
+        </div>
+      `).join("") : `<div class="col-span-full themed-card p-8 text-center text-sm" style="color: var(--text-muted);">Your Study Vault is empty. Save solutions from any workspace!</div>`;
+      renderMathInContainer(document.getElementById("vaultGrid"));
+    }
+
+    function renderSpacedRepetitionDecks() {
+      const decks = getActiveProfile().decks || [];
+      document.getElementById("srDecksGrid").innerHTML = decks.map(d => `
+        <div class="themed-card p-4 space-y-3">
+          <h4 class="font-bold text-sm">${escapeHtml(d.title)}</h4>
+          <p class="text-xs" style="color: var(--text-muted);">${d.cards.length} cards</p>
+          <button onclick="openFlashcardDeck('${d.id}')" class="btn-primary px-3 py-1.5 text-xs font-bold">Study Deck</button>
+        </div>
+      `).join("");
+    }
+
+    async function generateFlashcardsFromCustomTopic() {
+      const topic = document.getElementById("customDeckTopic").value.trim();
+      if (!topic) return;
+      document.getElementById("customDeckTopic").value = "";
+      const schema = { type: "ARRAY", items: { type: "OBJECT", properties: { front: { type: "STRING" }, back: { type: "STRING" } }, required: ["front", "back"] } };
+      try {
+        const cards = await callGemini({ parts: [{ text: `Create 4 concise flashcards for: ${topic}` }], systemInstruction: buildSystemPrompt("Flashcard creator."), responseSchema: schema });
+        const p = getActiveProfile();
+        p.decks.unshift({ id: "d-" + Date.now(), title: topic, cards: cards.map(c => ({ ...c, status: "new" })) });
+        saveFamilyStore();
+        renderSpacedRepetitionDecks();
+        showToast("Deck created!", "success");
+      } catch (e) { showToast(e.message, "error"); }
+    }
+
+    function openFlashcardDeck(id) {
+      state.activeDeckId = id; state.activeCardIdx = 0; state.cardFlipped = false;
+      document.getElementById("fcStage").classList.remove("hidden");
+      document.getElementById("flashcardModal").classList.remove("hidden");
+      document.getElementById("flashcardModal").classList.add("flex");
+      renderCurrentFlashcard();
+    }
+    function renderCurrentFlashcard() {
+      const deck = (getActiveProfile().decks || []).find(d => d.id === state.activeDeckId);
+      if (!deck) return;
+      const c = deck.cards[state.activeCardIdx];
+      document.getElementById("fcDeckTitle").textContent = deck.title;
+      document.getElementById("fcProgressText").textContent = `Card ${state.activeCardIdx + 1} of ${deck.cards.length}`;
+      document.getElementById("fcFrontText").innerHTML = formatRichText(c.front);
+      document.getElementById("fcBackText").innerHTML = formatRichText(c.back);
+      document.getElementById("fcCardInner").classList.toggle("is-flipped", state.cardFlipped);
+      renderMathInContainer(document.getElementById("fcStage"));
+    }
+    function flipFlashcard() { state.cardFlipped = !state.cardFlipped; document.getElementById("fcCardInner").classList.toggle("is-flipped", state.cardFlipped); }
+    function rateFlashcard(r) {
+      const deck = (getActiveProfile().decks || []).find(d => d.id === state.activeDeckId);
+      if (!deck) return;
+      if (r === "easy") { deck.cards[state.activeCardIdx].status = "mastered"; awardXP(10, "Card Mastered"); }
+      state.activeCardIdx = (state.activeCardIdx + 1) % deck.cards.length;
+      state.cardFlipped = false;
+      saveFamilyStore();
+      renderCurrentFlashcard();
+    }
+
+    async function startTimedExam() {
+      const subj = document.getElementById("examSubjectSelect").value;
+      const count = Number(document.getElementById("examCountSelect").value);
+      const mins = Number(document.getElementById("examDurationSelect").value);
+      document.getElementById("examSetupCard").classList.add("hidden");
+      document.getElementById("examLoadingCard").classList.remove("hidden");
+      const schema = {
+        type: "OBJECT",
+        properties: { examTitle: { type: "STRING" }, questions: { type: "ARRAY", items: { type: "OBJECT", properties: { prompt: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, correctAnswer: { type: "STRING" } }, required: ["prompt", "options", "correctAnswer"] } } },
+        required: ["examTitle", "questions"]
+      };
+      try {
+        const res = await callGemini({ parts: [{ text: `Create a ${count}-question multiple-choice exam on ${subj}.` }], systemInstruction: buildSystemPrompt("Exam creator."), responseSchema: schema });
+        state.exam = { questions: res.questions, subject: subj, title: res.examTitle, secondsLeft: mins * 60, timerId: null };
+        document.getElementById("examActiveTitle").textContent = res.examTitle;
+        document.getElementById("examQuestionsList").innerHTML = res.questions.map((q, i) => `
+          <div class="themed-subcard p-3.5 space-y-2 text-sm">
+            <div class="font-bold rich-math">${i + 1}. ${formatRichText(q.prompt)}</div>
+            ${q.options.map(o => `<label class="flex items-center gap-2 text-xs cursor-pointer"><input type="radio" name="ex_${i}" value="${escapeHtml(o)}" /> <span class="rich-math">${formatRichText(o)}</span></label>`).join("")}
+          </div>
+        `).join("");
+        document.getElementById("examActiveCard").classList.remove("hidden");
+        renderMathInContainer(document.getElementById("examQuestionsList"));
+        state.exam.timerId = setInterval(() => {
+          state.exam.secondsLeft--;
+          document.getElementById("examCountdown").textContent = `${Math.floor(state.exam.secondsLeft / 60)}:${String(state.exam.secondsLeft % 60).padStart(2, "0")}`;
+          if (state.exam.secondsLeft <= 0) submitTimedExam();
+        }, 1000);
+      } catch (e) { document.getElementById("examSetupCard").classList.remove("hidden"); showToast(e.message, "error"); }
+      finally { document.getElementById("examLoadingCard").classList.add("hidden"); }
+    }
+
+    function submitTimedExam() {
+      clearInterval(state.exam.timerId);
+      let correct = 0;
+      state.exam.questions.forEach((q, i) => {
+        const sel = document.querySelector(`input[name="ex_${i}"]:checked`)?.value;
+        if (sel === q.correctAnswer) correct++;
+      });
+      const pct = Math.round((correct / state.exam.questions.length) * 100);
+      const p = getActiveProfile();
+      p.mastery = p.mastery || {};
+      p.mastery[state.exam.subject] = { subject: state.exam.subject, solved: (p.mastery[state.exam.subject]?.solved || 0) + state.exam.questions.length, accuracy: pct };
+      saveFamilyStore();
+      if (pct >= 80) awardXP(50, "High Exam Score!");
+      document.getElementById("examActiveCard").classList.add("hidden");
+      const rep = document.getElementById("examReportCard");
+      rep.innerHTML = `<h3 class="text-lg font-extrabold">Exam Complete: ${pct}% (${correct}/${state.exam.questions.length})</h3><button onclick="document.getElementById('examReportCard').classList.add('hidden');document.getElementById('examSetupCard').classList.remove('hidden');" class="btn-primary px-4 py-2 text-xs font-bold">New Exam</button>`;
+      rep.classList.remove("hidden");
+      renderMasteryHeatmap();
+    }
+
+    function renderMasteryHeatmap() {
+      const m = getActiveProfile().mastery || {};
+      document.getElementById("masteryHeatmapGrid").innerHTML = Object.entries(m).map(([topic, info]) => {
+        const col = info.accuracy >= 80 ? "#10B981" : info.accuracy >= 60 ? "#F59E0B" : "#F43F5E";
+        return `
+          <div class="p-4 rounded-2xl border-2 space-y-1" style="border-color: ${col}; background-color: ${col}22;">
+            <div class="flex justify-between text-xs font-bold"><span>${escapeHtml(info.subject)}</span><span style="color:${col}">${info.accuracy}%</span></div>
+            <div class="font-extrabold text-base">${escapeHtml(topic)}</div>
+            <div class="text-[11px]" style="color: var(--text-muted);">${info.solved} completed</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    /* =========================================================================
+       14. WORKSPACE 9: PARENT COMMAND CENTER & FAMILY REWARDS
+       ========================================================================= */
+    function renderParentDashboard() {
+      const kids = familyStore.profiles.filter(p => p.role === "student");
+
+      // Child Overview Cards + Per-Child Socratic Guardrail Toggle
+      document.getElementById("parentChildrenGrid").innerHTML = kids.map(k => {
+        const weak = Object.entries(k.mastery || {}).sort((a, b) => a[1].accuracy - b[1].accuracy)[0];
+        return `
+          <div class="themed-card p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <span class="text-3xl">${k.avatar}</span>
+                <div><h3 class="font-extrabold text-base">${escapeHtml(k.name)}</h3><p class="text-xs" style="color: var(--text-muted);">${k.gradeLabel} • PIN: ${k.pin}</p></div>
+              </div>
+              <span class="px-2.5 py-1 rounded-lg font-mono font-bold text-xs accent-badge">⭐ ${k.xp} XP • 🔥 ${k.streak}d</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="themed-subcard p-2.5"><span style="color: var(--text-muted);">Weakest Topic:</span><div class="font-bold text-amber-500">${weak ? `${weak[0]} (${weak[1].accuracy}%)` : "None"}</div></div>
+              <div class="themed-subcard p-2.5"><span style="color: var(--text-muted);">Interests:</span><div class="font-bold truncate">${(k.interests || []).join(", ")}</div></div>
+            </div>
+            <label class="flex items-center justify-between p-3 rounded-xl themed-subcard cursor-pointer text-xs font-bold">
+              <span>🔒 Lock Socratic Tutor Mode (Hints Only)</span>
+              <input type="checkbox" ${k.lockSocratic ? "checked" : ""} onchange="toggleChildGuardrail('${k.id}', this.checked)" class="w-4 h-4 accent-amber-500" />
+            </label>
+          </div>
+        `;
+      }).join("");
+
+      // Rewards Manager
+      document.getElementById("parentRewardsList").innerHTML = familyStore.rewards.map(r => `
+        <div class="themed-subcard px-3 py-2 flex items-center justify-between text-xs">
+          <span class="font-bold">${escapeHtml(r.title)}</span>
+          <span class="font-mono font-bold accent-badge px-2 py-0.5 rounded">${r.cost} XP</span>
+        </div>
+      `).join("");
+
+      // Pending Redemption Requests
+      const reqs = familyStore.rewardRequests.filter(r => r.status === "Pending");
+      document.getElementById("parentRewardRequestsList").innerHTML = reqs.length ? reqs.map(r => `
+        <div class="themed-subcard p-2.5 flex items-center justify-between gap-2">
+          <div><strong>${escapeHtml(r.childName)}</strong> wants <em>${escapeHtml(r.rewardTitle)}</em> (${r.cost} XP)</div>
+          <div class="flex gap-1">
+            <button onclick="resolveRewardRequest('${r.id}', true)" class="px-2 py-1 rounded bg-emerald-600 text-white font-bold">Approve</button>
+            <button onclick="resolveRewardRequest('${r.id}', false)" class="px-2 py-1 rounded bg-rose-600 text-white font-bold">Deny</button>
+          </div>
+        </div>
+      `).join("") : `<p style="color: var(--text-muted);">No pending requests.</p>`;
+
+      // Transcripts Filter & List
+      const sel = document.getElementById("transcriptChildFilter");
+      const curFilter = sel.value || "all";
+      sel.innerHTML = `<option value="all">All Children</option>` + kids.map(k => `<option value="${k.id}" ${curFilter === k.id ? "selected" : ""}>${escapeHtml(k.name)}</option>`).join("");
+      const allLogs = kids.filter(k => curFilter === "all" || k.id === curFilter).flatMap(k => (k.transcripts || []).map(t => ({ ...t, child: k.name })));
+      document.getElementById("parentTranscriptsList").innerHTML = allLogs.length ? allLogs.map(t => `
+        <div class="themed-subcard p-3 text-xs space-y-1">
+          <div class="flex justify-between font-bold"><span>${escapeHtml(t.child)} • ${escapeHtml(t.workspace)}</span><span style="color: var(--text-muted);">${t.date}</span></div>
+          <div><strong>Asked:</strong> ${escapeHtml(t.prompt)}</div>
+          <div style="color: var(--text-secondary);"><strong>AI:</strong> ${escapeHtml(t.response)}</div>
+        </div>
+      `).join("") : `<p class="text-xs" style="color: var(--text-muted);">No AI transcripts recorded yet.</p>`;
+
+      // Combined Family Calendar
+      const allDue = kids.flatMap(k => (k.assignments || []).map(a => ({ ...a, child: k.name, avatar: k.avatar })));
+      document.getElementById("parentFamilyCalendar").innerHTML = allDue.map(a => `
+        <div class="themed-subcard p-3 text-xs space-y-1">
+          <div class="flex justify-between font-bold"><span>${a.avatar} ${escapeHtml(a.child)}</span><span class="text-amber-500">${escapeHtml(a.due)}</span></div>
+          <div class="font-semibold">${escapeHtml(a.title)}</div>
+          <div style="color: var(--text-muted);">${escapeHtml(a.source)}</div>
+        </div>
+      `).join("");
+    }
+
+    function toggleChildGuardrail(childId, checked) {
+      const k = familyStore.profiles.find(p => p.id === childId);
+      if (k) { k.lockSocratic = checked; saveFamilyStore(); showToast(`Updated guardrail for ${k.name}.`, "success"); }
+    }
+
+    function addFamilyReward() {
+      const title = document.getElementById("newRewardTitle").value.trim();
+      const cost = Number(document.getElementById("newRewardXP").value) || 200;
+      if (!title) return;
+      familyStore.rewards.push({ id: "rew-" + Date.now(), title, cost });
+      document.getElementById("newRewardTitle").value = "";
+      saveFamilyStore();
+      renderParentDashboard();
+      showToast("Reward added!", "success");
+    }
+
+    function resolveRewardRequest(reqId, approved) {
+      const req = familyStore.rewardRequests.find(r => r.id === reqId);
+      if (!req) return;
+      req.status = approved ? "Approved" : "Denied";
+      if (!approved) {
+        const kid = familyStore.profiles.find(p => p.id === req.profileId);
+        if (kid) kid.xp += req.cost; // refund XP
+      }
+      saveFamilyStore();
+      renderParentDashboard();
+      showToast(approved ? "Reward approved!" : "Request denied & XP refunded.", "info");
+    }
+
+    function openKidRewardsModal() {
+      const p = getActiveProfile();
+      document.getElementById("kidRewardsBalance").textContent = `Your Balance: ${p.xp} XP`;
+      document.getElementById("kidRewardsList").innerHTML = familyStore.rewards.map(r => `
+        <div class="themed-subcard p-3 flex items-center justify-between gap-2">
+          <div><div class="font-bold text-sm">${escapeHtml(r.title)}</div><div class="text-xs font-mono" style="color: var(--accent-text);">${r.cost} XP</div></div>
+          <button onclick="requestReward('${r.id}')" class="btn-primary px-3 py-1.5 text-xs font-bold" ${p.xp < r.cost ? "disabled" : ""}>Redeem</button>
+        </div>
+      `).join("");
+      document.getElementById("kidRewardsModal").classList.remove("hidden");
+      document.getElementById("kidRewardsModal").classList.add("flex");
+    }
+
+    function requestReward(rewId) {
+      const p = getActiveProfile();
+      const r = familyStore.rewards.find(x => x.id === rewId);
+      if (!r || p.xp < r.cost) return;
+      p.xp -= r.cost;
+      familyStore.rewardRequests.unshift({ id: "req-" + Date.now(), profileId: p.id, childName: p.name, rewardTitle: r.title, cost: r.cost, status: "Pending" });
+      saveFamilyStore();
+      updateTopProfileUI();
+      openKidRewardsModal();
+      showToast(`Requested "${r.title}" — waiting for Parent approval!`, "success");
+    }
+
+    /* =========================================================================
+       15. POMODORO, STEM LAB & UTILITIES
+       ========================================================================= */
+    function updatePomodoroUI() {
+      const m = Math.floor(state.pomodoro.secondsLeft / 60), s = state.pomodoro.secondsLeft % 60;
+      document.getElementById("pomoDisplay").textContent = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+      document.getElementById("pomoModeBtn").textContent = state.pomodoro.mode === "focus" ? "25m" : "5m";
+    }
+    function togglePomodoroMode() { clearInterval(state.pomodoro.timerId); state.pomodoro.running = false; state.pomodoro.mode = state.pomodoro.mode === "focus" ? "break" : "focus"; state.pomodoro.secondsLeft = state.pomodoro.mode === "focus" ? 1500 : 300; updatePomodoroUI(); }
+    function togglePomodoroRun() {
+      if (state.pomodoro.running) { clearInterval(state.pomodoro.timerId); state.pomodoro.running = false; }
+      else {
+        state.pomodoro.running = true;
+        state.pomodoro.timerId = setInterval(() => {
+          state.pomodoro.secondsLeft--;
+          if (state.pomodoro.secondsLeft <= 0) { clearInterval(state.pomodoro.timerId); state.pomodoro.running = false; awardXP(40, "Pomodoro Focus Done!"); }
+          updatePomodoroUI();
+        }, 1000);
+      }
+      updatePomodoroUI();
+    }
+    function resetPomodoro() { clearInterval(state.pomodoro.timerId); state.pomodoro.running = false; state.pomodoro.secondsLeft = state.pomodoro.mode === "focus" ? 1500 : 300; updatePomodoroUI(); }
+
+    // STEM Lab (Periodic Table subset + Molar Mass + Formulas + Units)
+    const ELEMENTS = [
+      [1,"H","Hydrogen",1.008,"#0284C7",1,1],[2,"He","Helium",4.003,"#7C3AED",18,1],
+      [3,"Li","Lithium",6.94,"#DC2626",1,2],[4,"Be","Beryllium",9.012,"#EA580C",2,2],[5,"B","Boron",10.81,"#0D9488",13,2],[6,"C","Carbon",12.011,"#0284C7",14,2],[7,"N","Nitrogen",14.007,"#0284C7",15,2],[8,"O","Oxygen",15.999,"#0284C7",16,2],[9,"F","Fluorine",18.998,"#059669",17,2],[10,"Ne","Neon",20.18,"#7C3AED",18,2],
+      [11,"Na","Sodium",22.99,"#DC2626",1,3],[12,"Mg","Magnesium",24.305,"#EA580C",2,3],[13,"Al","Aluminum",26.982,"#4F46E5",13,3],[14,"Si","Silicon",28.085,"#0D9488",14,3],[15,"P","Phosphorus",30.974,"#0284C7",15,3],[16,"S","Sulfur",32.06,"#0284C7",16,3],[17,"Cl","Chlorine",35.45,"#059669",17,3],[18,"Ar","Argon",39.948,"#7C3AED",18,3],
+      [19,"K","Potassium",39.098,"#DC2626",1,4],[20,"Ca","Calcium",40.078,"#EA580C",2,4],[26,"Fe","Iron",55.845,"#2563EB",8,4],[29,"Cu","Copper",63.546,"#2563EB",11,4],[30,"Zn","Zinc",65.38,"#2563EB",12,4],[35,"Br","Bromine",79.904,"#059669",17,4],[47,"Ag","Silver",107.87,"#2563EB",11,5],[53,"I","Iodine",126.9,"#059669",17,5],[79,"Au","Gold",196.97,"#2563EB",11,6],[80,"Hg","Mercury",200.59,"#2563EB",12,6],[82,"Pb","Lead",207.2,"#4F46E5",14,6],[92,"U","Uranium",238.03,"#9333EA",6,7]
+    ];
+    const MASS_MAP = Object.fromEntries(ELEMENTS.map(e => [e[1], e[3]]));
+    function openStemDrawer() { document.getElementById("stemModal").classList.remove("hidden"); document.getElementById("stemModal").classList.add("flex"); setStemTab("periodic"); }
+    function setStemTab(t) {
+      ["periodic", "molar", "formulas", "units"].forEach(k => {
+        const cap = k.charAt(0).toUpperCase() + k.slice(1);
+        document.getElementById(`stemTab${cap}`).style.backgroundColor = k === t ? "var(--accent)" : "transparent";
+        document.getElementById(`stemTab${cap}`).style.color = k === t ? "#FFF" : "var(--text-secondary)";
+        document.getElementById(`stemPanel${cap}`).classList.toggle("hidden", k !== t);
+      });
+      if (t === "formulas") renderMathInContainer(document.getElementById("stemPanelFormulas"));
+    }
+    function buildPeriodicTable() {
+      document.getElementById("ptableGrid").innerHTML = ELEMENTS.map(e => `
+        <div onclick="document.getElementById('ptableDetailBanner').innerHTML='<strong>${e[0]} ${e[1]} — ${e[2]}</strong> | Atomic Mass: <strong>${e[3]} g/mol</strong>'"
+             class="ptable-cell text-white" style="grid-column:${e[5]};grid-row:${e[6]};background:${e[4]};">
+          <span class="text-[8px]">${e[0]}</span><span class="text-xs font-bold">${e[1]}</span>
+        </div>
+      `).join("");
+    }
+    function calculateMolarMass() {
+      const f = document.getElementById("molarFormulaInput").value.trim();
+      const matches = [...f.matchAll(/([A-Z][a-z]?)(\d*)/g)];
+      let total = 0;
+      for (const [, sym, qty] of matches) { total += (MASS_MAP[sym] || 0) * (Number(qty) || 1); }
+      document.getElementById("molarResultBox").innerHTML = `<div class="p-3 rounded-xl success-box font-mono font-bold flex justify-between"><span>${escapeHtml(f)}</span><span>${total.toFixed(3)} g/mol</span></div>`;
+    }
+    function buildFormulaSheet() {
+      document.getElementById("stemPanelFormulas").innerHTML = [
+        ["Math", "$$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$", "$$a^2+b^2=c^2$$"],
+        ["Physics", "$$F = ma$$", "$$KE = \\frac{1}{2}mv^2$$"],
+        ["Chemistry", "$$PV = nRT$$", "$$\\text{pH} = -\\log_{10}[\\text{H}^+]$$"]
+      ].map(([t, f1, f2]) => `<div class="themed-subcard p-4 space-y-2"><h4 class="font-bold text-xs uppercase" style="color:var(--accent-text)">${t}</h4><div>${f1}</div><div>${f2}</div></div>`).join("");
+    }
+    const UNIT_T = { length: { m: 1, km: 1000, ft: 0.3048, mi: 1609.34 }, mass: { kg: 1, g: 0.001, lb: 0.45359 }, temperature: { C: 1, F: 1, K: 1 }, energy: { J: 1, kJ: 1000, cal: 4.184 } };
+    function populateUnitSelectors() {
+      const keys = Object.keys(UNIT_T[document.getElementById("unitCategory").value]);
+      document.getElementById("unitFrom").innerHTML = keys.map(k => `<option value="${k}">${k}</option>`).join("");
+      document.getElementById("unitTo").innerHTML = keys.map((k, i) => `<option value="${k}" ${i === 1 ? "selected" : ""}>${k}</option>`).join("");
+      convertUnits();
+    }
+    function convertUnits() {
+      const cat = document.getElementById("unitCategory").value, v = parseFloat(document.getElementById("unitInputVal").value), f = document.getElementById("unitFrom").value, t = document.getElementById("unitTo").value;
+      if (isNaN(v)) return;
+      let out = cat === "temperature" ? (f === "C" && t === "F" ? v * 9 / 5 + 32 : f === "F" && t === "C" ? (v - 32) * 5 / 9 : v) : (v * UNIT_T[cat][f]) / UNIT_T[cat][t];
+      document.getElementById("unitOutputVal").value = Number(out.toFixed(4));
+    }
+
+    // Voice Dictation & Read-Aloud
+    function toggleVoiceDictation(targetId, btnId) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) return showToast("Voice dictation not supported in this browser.", "error");
+      if (state.voice.recognition) { state.voice.recognition.stop(); return; }
+      const rec = new SR(); rec.lang = "en-US"; state.voice.recognition = rec;
+      const btn = document.getElementById(btnId);
+      rec.onstart = () => btn?.classList.add("mic-recording");
+      rec.onresult = e => { const el = document.getElementById(targetId); el.value = (el.value ? el.value + " " : "") + e.results[0][0].transcript; };
+      rec.onend = () => { btn?.classList.remove("mic-recording"); state.voice.recognition = null; };
+      rec.start();
+    }
+    function speakText(raw) {
+      if (!("speechSynthesis" in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(String(raw).replace(/[$\\*`]/g, " "));
+      const sb = document.getElementById("stopAudioBtn");
+      u.onstart = () => { sb.classList.remove("hidden"); sb.classList.add("flex"); };
+      u.onend = () => { sb.classList.add("hidden"); sb.classList.remove("flex"); };
+      window.speechSynthesis.speak(u);
+    }
+    function stopSpeaking() { window.speechSynthesis.cancel(); document.getElementById("stopAudioBtn").classList.add("hidden"); }
+
+    // Helpers
+    function closeModal(id) { document.getElementById(id).classList.add("hidden"); document.getElementById(id).classList.remove("flex"); }
+    function escapeHtml(s = "") { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+    function ensureMathDisplay(e = "") { return /\$/.test(e) ? e : `$$${e}$$`; }
+    function formatRichText(t = "") {
+      const tok = [];
+      const p = String(t).replace(/(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$)/g, m => { const id = `@@M${tok.length}@@`; tok.push(m); return id; });
+      let h = escapeHtml(p).replace(/\*\*([\s\S]+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br/>");
+      tok.forEach((m, i) => { h = h.replace(`@@M${i}@@`, m); });
+      return h;
+    }
+    function renderMathInContainer(el) {
+      if (el && typeof window.renderMathInElement === "function") {
+        window.renderMathInElement(el, { delimiters: [{ left: "$$", right: "$$", display: true }, { left: "$", right: "$", display: false }], throwOnError: false });
+      }
+    }
+    function showToast(msg, type = "info") {
+      const c = document.getElementById("toastContainer");
+      const t = document.createElement("div");
+      t.className = `pointer-events-auto px-4 py-2 rounded-xl text-xs font-bold shadow-xl ${type === "success" ? "bg-emerald-600 text-white" : type === "error" ? "bg-rose-600 text-white" : "bg-slate-800 text-white"}`;
+      t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => t.remove(), 2800);
+    }
+  </script>
+</body>
+</html>
